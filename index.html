@@ -1081,23 +1081,15 @@ function openSettings(){
   // to register — hides the whole section rather than leaving a stale
   // "register" form sitting above your own already-locked identity.
   const registrationSectionHTML = identityIsLocked ? '' : `
-    <p style="color:var(--text);font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 10px;">Registrera dig för Postgres (beta)</p>
-    <p style="color:var(--muted);font-size:12.5px;margin-top:-4px;">
-      Den nya databasen som testas parallellt med Sheetet kräver att du
-      registrerar dig en gång. Skriv ditt namn, fyll i din mejladress och
-      registrera — Kecke godkänner dig sedan manuellt och skickar en
-      personlig token direkt till dig (aldrig i chatt). Klistra in den
-      token:en här nedanför när du fått den.
-    </p>
     <div class="field">
-      <label>Namn</label>
+      <label>Namn (för registrering)</label>
       <input type="text" id="fRegFiskare" placeholder="t.ex. Björn" value="${config.registeredName||''}">
     </div>
     <div class="field">
       <label>Mejladress</label>
       <input type="email" id="fRegEmail" placeholder="din@mejladress.se">
     </div>
-    <button class="btn btn-primary" id="fRegSubmit" style="width:100%;">Registrera</button>
+    <button class="btn btn-primary" id="fRegSubmit" style="width:100%;">Registrera för Postgres</button>
     <p id="fRegFeedback" style="font-size:12.5px;margin:10px 0 0;display:none;"></p>
   `;
 
@@ -1142,30 +1134,13 @@ function openSettings(){
 
     <hr style="border-color:var(--border);margin:0 0 16px;">
 
-    <h2>Export-inställningar</h2>
+    <h2>Export-inställningar — ⚠️ SANDBOX</h2>
     <p style="color:var(--muted);font-size:12.5px;margin-top:-8px;">
-      Plats, Drag, Fiskare, Vattentemp, Vindriktning, Lufttryck och Trend väljs i fälten högst upp —
-      Datum fylls i automatiskt och kan inte ändras. Två destinationer nedan: Sheetet (alltid) och
-      Postgres <b>fishing_sandbox</b> (bara om Namn + Token är ifyllda).
+      Sheetet skrivs alltid. Postgres (egen isolerad testdatabas) bara om
+      Namn + Token nedan är ifyllda — token fås av Kecke, aldrig i chatt.
     </p>
-
-    <p style="color:var(--text);font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px;">Google Sheet</p>
     ${urlFieldsHTML}
     ${registrationSectionHTML}
-
-    <p style="color:var(--text);font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 10px;">Postgres (beta) — ⚠️ SANDBOX</p>
-    <p style="color:var(--muted);font-size:12.5px;margin-top:-4px;">
-      Din egen personliga token för <b>fishing_sandbox</b> — en helt egen,
-      databasnivå-isolerad kopia av den riktiga databasen (2026-08-31),
-      inte samma token som den riktiga appen använder. Skriver ALDRIG till
-      den riktiga fishing-databasen, ens av misstag (Postgres själv
-      nekar det, inte bara appens inställningar). Fråga Kecke om en — den
-      skickas aldrig i chatt, bara direkt. Tomt fält = fångster loggas till
-      sandbox-Sheetet som vanligt, ingen Postgres-skrivning görs alls (helt
-      ofarligt att lämna tomt). Fyll i båda fälten nedan (namn + token) för
-      att låsa Fiskare-väljaren till dig själv högst upp — annars fungerar
-      den precis som innan.
-    </p>
     ${pgTokenFieldsHTML}
 
     <hr style="border-color:var(--border);margin:16px 0;">
