@@ -252,7 +252,7 @@
     background:#0f1119;
     border-top:1px solid var(--border-accent);
     padding:9px 11px calc(11px + env(safe-area-inset-bottom));
-    display:flex; gap:3px; align-items:center; justify-content:space-between;
+    display:flex; gap:2px; align-items:center; justify-content:space-between;
     max-width:520px; margin:0 auto;
     overflow-x:auto;
     /* Safety net for narrow real phones (also found via real-device
@@ -266,7 +266,7 @@
     display:flex; align-items:center; justify-content:center; gap:6px;
     background:transparent; color:var(--muted);
   }
-  .bar-btn{flex:none; color:var(--muted); padding:0 6px; font-size:9px; letter-spacing:.02em;}
+  .bar-btn{flex:none; color:var(--muted); padding:0 4px; font-size:9px; letter-spacing:0;}
   /* Teaser/placeholder for a not-yet-built feature — deliberately looks
      muted/inert like a disabled control, but stays a real, clickable
      button (a genuinely disabled one wouldn't fire click at all) so
@@ -1377,12 +1377,12 @@ function openStatsView(){
     <tr>
       <td>${cellSelectHTML(SPECIES.map(s=>s.art), c.id, 'art', c.art)}</td>
       <td>${cellSelectHTML(SIZES, c.id, 'storlek', c.storlek)}</td>
-      <td>${cellSelectHTML(FISKARE_LIST, c.id, 'fiskare', c.fiskare)}</td>
       <td>${cellSelectHTML(effectivePlatsList, c.id, 'plats', c.plats)}</td>
       <td>${cellSelectHTML(DRAG_LIST, c.id, 'drag', c.drag)}</td>
       <td>${cellSelectHTML(VINDRIKTNING_LIST, c.id, 'vindriktning', c.vindriktning)}</td>
       <td>${cellSelectHTML(LUFTTRYCK_LIST, c.id, 'lufttryck', c.lufttryck)}</td>
       <td>${cellSelectHTML(LUFTTRYCKSTREND_LIST, c.id, 'lufttryckstrend', c.lufttryckstrend)}</td>
+      <td>${cellSelectHTML(FISKARE_LIST, c.id, 'fiskare', c.fiskare)}</td>
       <td>${c.datum}</td><td>${c.tid||'–'}</td>
       <td><button class="measure-cell ${c.vikt==null?'unset':''}" data-id="${c.id}">${c.vikt!=null ? c.vikt+' g' : '–'}</button></td>
       <td><button class="measure-cell ${c.langd==null?'unset':''}" data-id="${c.id}">${c.langd!=null ? c.langd+' cm' : '–'}</button></td>
@@ -1402,14 +1402,14 @@ function openStatsView(){
     <div class="stats-table-wrap">
       <table class="stats-table">
         <thead><tr>
-          <th>Art</th><th>Storlek</th><th>Fiskare</th><th>Plats</th><th>Drag</th><th>Vind</th><th>Tryck</th><th>Trend</th><th>Datum</th><th>Tid</th><th>Vikt</th><th>Längd</th><th></th>
+          <th>Art</th><th>Storlek</th><th>Plats</th><th>Drag</th><th>Vind</th><th>Tryck</th><th>Trend</th><th>Fiskare</th><th>Datum</th><th>Tid</th><th>Vikt</th><th>Längd</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
     <p style="color:var(--muted);font-size:11px;margin:10px 2px 0;">
       Tryck på Vikt/Längd för att fylla i efter vägning/mätning — valfritt om ni bara gjort ett av de två.
-      Art/Storlek/Fiskare/Plats/Drag/Vind går att ändra direkt i listan om något
+      Art/Storlek/Plats/Drag/Vind/Fiskare går att ändra direkt i listan om något
       loggades fel eller glömdes byta.
     </p>
     <div class="stats-summary">
