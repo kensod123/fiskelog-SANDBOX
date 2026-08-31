@@ -486,11 +486,18 @@ const PLATS_LIST = [
 // !!! Replace with your deployed Apps Script Web App URL !!!
 const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxv1phCdPQ6k7ACaHB08-2ljVbRrTb8SKhVu0YAGTA1ilBxCnVHPwj5gKNoNysBVnK_/exec';
 
-const STORAGE_KEY = 'pelagio_pending_catches_v1';
-const PLATSER_STORAGE_KEY = 'pelagio_pending_platser_v1';
-const PLATS_CACHE_KEY = 'pelagio_plats_cache_v1';
-const SESSION_KEY = 'pelagio_session_v1';
-const CONFIG_KEY = 'pelagio_config_v1';
+// Sandbox-specific suffix (2026-08-31): kensod123.github.io/fiskelog/ and
+// kensod123.github.io/fiskelog-SANDBOX/ are the SAME origin — path doesn't
+// factor into it — so without this, the sandbox app would silently share
+// production's actual localStorage (config, pending catchLog, session) on
+// the same phone/browser. sw.js's cache name got this same treatment
+// already; these keys were missed until now. Never remove the suffix here
+// without also giving the sandbox its own separate GitHub Pages origin.
+const STORAGE_KEY = 'pelagio_pending_catches_v1_sandbox';
+const PLATSER_STORAGE_KEY = 'pelagio_pending_platser_v1_sandbox';
+const PLATS_CACHE_KEY = 'pelagio_plats_cache_v1_sandbox';
+const SESSION_KEY = 'pelagio_session_v1_sandbox';
+const CONFIG_KEY = 'pelagio_config_v1_sandbox';
 
 // Direct link to the Google Sheet itself (not the Apps Script exec URL) — shown as a
 // plain "open the sheet" shortcut in ⚙ Settings.
@@ -507,6 +514,18 @@ const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1H57ZQdEoXSZSuZ
 // same Tailscale network as the server — a real rollout step per angler,
 // not just this code change.
 const PG_BASE_URL = 'https://homeserver.tailffb774.ts.net';
+// SANDBOX ISOLATION (2026-08-31): this app writes to `fishing_sandbox`,
+// NOT the real `fishing` schema — same PostgREST server/host as
+// production (that part's still shared, it's just a routing detail), but
+// every write below sends 'Content-Profile': 'fishing_sandbox', and the
+// personal token entered in Settings must be a fishing_sandbox_writer
+// token (NOT a real fishing_writer token — the two are not
+// interchangeable and Postgres itself enforces that: fishing_sandbox_writer
+// has zero grants on fishing.*, verified with an actual negative test by
+// Homelab, not just the GRANT statements). See TODO.md's 2026-08-31 entry
+// for the full setup. Never repoint this at 'fishing' to "simplify"
+// something — that's the exact real-vs-test-data mixing this schema
+// split exists to prevent.
 // NOTE (2026-08-30): there is deliberately NO shared token constant here
 // anymore. An earlier version baked one directly into this file — that's
 // exactly how it ended up exposed in the public JS (anyone's browser
@@ -1080,14 +1099,18 @@ function openSettings(){
 
     <hr style="border-color:var(--border);margin:16px 0;">
 
-    <h2>Postgres-token (beta)</h2>
+    <h2>Postgres-token (beta) — ⚠️ SANDBOX</h2>
     <p style="color:var(--muted);font-size:12.5px;margin-top:-8px;">
-      Din egen personliga token, för den nya databasen som testas parallellt
-      med Sheetet. Fråga Kecke om en — den skickas aldrig i chatt, bara
-      direkt. Tomt fält = fångster loggas till Sheetet som vanligt, ingen
-      Postgres-skrivning görs alls (helt ofarligt att lämna tomt). Fyll i
-      båda fälten nedan (namn + token) för att låsa Fiskare-väljaren till
-      dig själv högst upp — annars fungerar den precis som innan.
+      Din egen personliga token för <b>fishing_sandbox</b> — en helt egen,
+      databasnivå-isolerad kopia av den riktiga databasen (2026-08-31),
+      inte samma token som den riktiga appen använder. Skriver ALDRIG till
+      den riktiga fishing-databasen, ens av misstag (Postgres själv
+      nekar det, inte bara appens inställningar). Fråga Kecke om en — den
+      skickas aldrig i chatt, bara direkt. Tomt fält = fångster loggas till
+      sandbox-Sheetet som vanligt, ingen Postgres-skrivning görs alls (helt
+      ofarligt att lämna tomt). Fyll i båda fälten nedan (namn + token) för
+      att låsa Fiskare-väljaren till dig själv högst upp — annars fungerar
+      den precis som innan.
     </p>
     <div class="field">
       <label>Ditt namn</label>
@@ -1601,7 +1624,7 @@ async function postgresWrite(path, rowsArr){
     const res = await fetch(PG_BASE_URL + path, {
       method: 'POST',
       headers: {
-        'Content-Profile': 'fishing',
+        'Content-Profile': 'fishing_sandbox',
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + config.pgToken
         // Deliberately NO "Prefer: return=representation" here — the
@@ -1650,7 +1673,7 @@ async function runPgIsolationTest(){
     const res = await fetch(PG_BASE_URL + '/catches', {
       method: 'POST',
       headers: {
-        'Content-Profile': 'fishing',
+        'Content-Profile': 'fishing_sandbox',
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + config.pgToken
       },
@@ -1701,7 +1724,7 @@ async function submitPostgresRegistration(){
     const res = await fetch(PG_BASE_URL + '/users', {
       method: 'POST',
       headers: {
-        'Content-Profile': 'fishing',
+        'Content-Profile': 'fishing_sandbox',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ email, fiskare })
