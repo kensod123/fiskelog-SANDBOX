@@ -666,6 +666,15 @@ if (!config || configIsStaleDefault) {
 // real value, just makes sure the field exists so config.pgToken is always
 // '' rather than undefined when nothing's been entered yet.
 if (config.pgToken === undefined) config.pgToken = '';
+// Edit-confirmation gates (2026-08-31) — Namn/Token and Web App URL/Delad
+// nyckel are easy to fat-finger and consequential to get wrong (wrong
+// token = catches attributed to someone else; wrong URL = catches routed
+// nowhere), so both render read-only by default and need an explicit
+// "are you sure" before becoming editable. In-memory only, on purpose —
+// resets to locked every time Settings is freshly opened from ⚙, not
+// persisted, so a confirmation never "sticks" past that one visit.
+let pgEditUnlocked = false;
+let urlEditUnlocked = false;
 // Timestamp of the last successful Sheet export — powers the header status
 // chip's "senast synkad X sedan" display (see renderHeaderRight()).
 if (config.lastSyncAt === undefined) config.lastSyncAt = null;
@@ -1042,6 +1051,78 @@ function openFiskarePicker(){
 }
 
 function openSettings(){
+  const identityIsLocked = identityLocked();
+  const pgLocked = identityIsLocked && !pgEditUnlocked;
+  const urlLocked = !urlEditUnlocked;
+
+  const urlFieldsHTML = urlLocked ? `
+    <div class="field">
+      <label>Web App URL</label>
+      <input type="text" value="${config.webAppUrl}" readonly style="opacity:.6;">
+    </div>
+    <div class="field">
+      <label>Delad nyckel (valfritt)</label>
+      <input type="text" value="${config.secret||''}" readonly style="opacity:.6;">
+    </div>
+    <button class="btn btn-secondary" id="fUrlEdit" style="width:100%;">✏️ Redigera</button>
+  ` : `
+    <div class="field">
+      <label>Web App URL</label>
+      <input type="text" id="fUrl" value="${config.webAppUrl}">
+    </div>
+    <div class="field">
+      <label>Delad nyckel (valfritt)</label>
+      <input type="text" id="fSecret" value="${config.secret||''}">
+    </div>
+    <button class="btn btn-primary" id="fSave" style="width:100%;">Spara</button>
+  `;
+
+  // Once you have both a token and a registered name there's nothing left
+  // to register — hides the whole section rather than leaving a stale
+  // "register" form sitting above your own already-locked identity.
+  const registrationSectionHTML = identityIsLocked ? '' : `
+    <p style="color:var(--text);font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 10px;">Registrera dig för Postgres (beta)</p>
+    <p style="color:var(--muted);font-size:12.5px;margin-top:-4px;">
+      Den nya databasen som testas parallellt med Sheetet kräver att du
+      registrerar dig en gång. Skriv ditt namn, fyll i din mejladress och
+      registrera — Kecke godkänner dig sedan manuellt och skickar en
+      personlig token direkt till dig (aldrig i chatt). Klistra in den
+      token:en här nedanför när du fått den.
+    </p>
+    <div class="field">
+      <label>Namn</label>
+      <input type="text" id="fRegFiskare" placeholder="t.ex. Björn" value="${config.registeredName||''}">
+    </div>
+    <div class="field">
+      <label>Mejladress</label>
+      <input type="email" id="fRegEmail" placeholder="din@mejladress.se">
+    </div>
+    <button class="btn btn-primary" id="fRegSubmit" style="width:100%;">Registrera</button>
+    <p id="fRegFeedback" style="font-size:12.5px;margin:10px 0 0;display:none;"></p>
+  `;
+
+  const pgTokenFieldsHTML = pgLocked ? `
+    <div class="field">
+      <label>Ditt namn</label>
+      <input type="text" value="${config.registeredName||''}" readonly style="opacity:.6;">
+    </div>
+    <div class="field">
+      <label>Personlig token</label>
+      <input type="text" value="${config.pgToken||''}" readonly style="opacity:.6;">
+    </div>
+    <button class="btn btn-secondary" id="fPgEdit" style="width:100%;">✏️ Redigera namn/token</button>
+  ` : `
+    <div class="field">
+      <label>Ditt namn</label>
+      <input type="text" id="fPgName" value="${config.registeredName||''}" placeholder="Samma namn du registrerade dig med">
+    </div>
+    <div class="field">
+      <label>Personlig token</label>
+      <input type="text" id="fPgToken" value="${config.pgToken||''}" placeholder="Klistra in här när du fått en av Kecke">
+    </div>
+    <button class="btn btn-primary" id="fPgSave" style="width:100%;">Spara token</button>
+  `;
+
   openOverlay(`
     <h2>Inställningar</h2>
 
@@ -1064,43 +1145,16 @@ function openSettings(){
     <h2>Export-inställningar</h2>
     <p style="color:var(--muted);font-size:12.5px;margin-top:-8px;">
       Plats, Drag, Fiskare, Vattentemp, Vindriktning, Lufttryck och Trend väljs i fälten högst upp —
-      Datum fylls i automatiskt och kan inte ändras.
+      Datum fylls i automatiskt och kan inte ändras. Två destinationer nedan: Sheetet (alltid) och
+      Postgres <b>fishing_sandbox</b> (bara om Namn + Token är ifyllda).
     </p>
-    <div class="field">
-      <label>Web App URL</label>
-      <input type="text" id="fUrl" value="${config.webAppUrl}">
-    </div>
-    <div class="field">
-      <label>Delad nyckel (valfritt)</label>
-      <input type="text" id="fSecret" value="${config.secret||''}">
-    </div>
-    <button class="btn btn-primary" id="fSave" style="width:100%;">Spara</button>
 
-    <hr style="border-color:var(--border);margin:16px 0;">
+    <p style="color:var(--text);font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px;">Google Sheet</p>
+    ${urlFieldsHTML}
+    ${registrationSectionHTML}
 
-    <h2>Registrera dig för Postgres (beta)</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-top:-8px;">
-      Den nya databasen som testas parallellt med Sheetet kräver att du
-      registrerar dig en gång. Skriv ditt namn, fyll i din mejladress och
-      registrera — Kecke godkänner dig sedan manuellt och skickar en
-      personlig token direkt till dig (aldrig i chatt). Klistra in den
-      token:en här nedanför när du fått den.
-    </p>
-    <div class="field">
-      <label>Namn</label>
-      <input type="text" id="fRegFiskare" placeholder="t.ex. Björn" value="${config.registeredName||''}">
-    </div>
-    <div class="field">
-      <label>Mejladress</label>
-      <input type="email" id="fRegEmail" placeholder="din@mejladress.se">
-    </div>
-    <button class="btn btn-primary" id="fRegSubmit" style="width:100%;">Registrera</button>
-    <p id="fRegFeedback" style="font-size:12.5px;margin:10px 0 0;display:none;"></p>
-
-    <hr style="border-color:var(--border);margin:16px 0;">
-
-    <h2>Postgres-token (beta) — ⚠️ SANDBOX</h2>
-    <p style="color:var(--muted);font-size:12.5px;margin-top:-8px;">
+    <p style="color:var(--text);font:600 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin:16px 0 10px;">Postgres (beta) — ⚠️ SANDBOX</p>
+    <p style="color:var(--muted);font-size:12.5px;margin-top:-4px;">
       Din egen personliga token för <b>fishing_sandbox</b> — en helt egen,
       databasnivå-isolerad kopia av den riktiga databasen (2026-08-31),
       inte samma token som den riktiga appen använder. Skriver ALDRIG till
@@ -1112,15 +1166,7 @@ function openSettings(){
       att låsa Fiskare-väljaren till dig själv högst upp — annars fungerar
       den precis som innan.
     </p>
-    <div class="field">
-      <label>Ditt namn</label>
-      <input type="text" id="fPgName" value="${config.registeredName||''}" placeholder="Samma namn du registrerade dig med">
-    </div>
-    <div class="field">
-      <label>Personlig token</label>
-      <input type="text" id="fPgToken" value="${config.pgToken||''}" placeholder="Klistra in här när du fått en av Kecke">
-    </div>
-    <button class="btn btn-primary" id="fPgSave" style="width:100%;">Spara token</button>
+    ${pgTokenFieldsHTML}
 
     <hr style="border-color:var(--border);margin:16px 0;">
 
@@ -1146,31 +1192,96 @@ function openSettings(){
   document.getElementById('btnNewPlats').addEventListener('click', openNewPlatsForm);
   document.getElementById('btnClearCache').addEventListener('click', confirmClearAppCache);
   document.getElementById('btnPgTest').addEventListener('click', runPgIsolationTest);
-  document.getElementById('fPgSave').addEventListener('click', ()=>{
-    config.pgToken = document.getElementById('fPgToken').value.trim();
-    config.registeredName = document.getElementById('fPgName').value.trim();
-    saveAll();
-    // If both fields are now filled, this locks identity immediately —
-    // removes the session-bar picker chip AND shows the header badge —
-    // rather than waiting for some other unrelated re-render to pick it up.
-    renderSessionBar();
-    renderHeaderRight();
-    closeOverlay();
-  });
-  document.getElementById('fRegSubmit').addEventListener('click', submitPostgresRegistration);
-  document.getElementById('fSave').addEventListener('click', ()=>{
-    const newUrl = document.getElementById('fUrl').value.trim();
-    config.webAppUrl = newUrl;
-    config.secret = document.getElementById('fSecret').value.trim();
-    // Only mark this as "the default" (auto-upgradeable later) if it matches what's
-    // actually baked into this file right now — a manually typed/custom URL keeps
-    // defaultAtSave at null so it's never silently overwritten by a future update.
-    config.defaultAtSave = (newUrl === DEFAULT_WEB_APP_URL) ? DEFAULT_WEB_APP_URL : null;
-    saveAll();
-    closeOverlay();
+
+  if(urlLocked){
+    document.getElementById('fUrlEdit').addEventListener('click', confirmEditUrl);
+  } else {
+    document.getElementById('fSave').addEventListener('click', ()=>{
+      const newUrl = document.getElementById('fUrl').value.trim();
+      config.webAppUrl = newUrl;
+      config.secret = document.getElementById('fSecret').value.trim();
+      // Only mark this as "the default" (auto-upgradeable later) if it matches what's
+      // actually baked into this file right now — a manually typed/custom URL keeps
+      // defaultAtSave at null so it's never silently overwritten by a future update.
+      config.defaultAtSave = (newUrl === DEFAULT_WEB_APP_URL) ? DEFAULT_WEB_APP_URL : null;
+      saveAll();
+      closeOverlay();
+    });
+  }
+
+  if(!identityIsLocked){
+    document.getElementById('fRegSubmit').addEventListener('click', submitPostgresRegistration);
+  }
+
+  if(pgLocked){
+    document.getElementById('fPgEdit').addEventListener('click', confirmEditPgToken);
+  } else {
+    document.getElementById('fPgSave').addEventListener('click', ()=>{
+      config.pgToken = document.getElementById('fPgToken').value.trim();
+      config.registeredName = document.getElementById('fPgName').value.trim();
+      saveAll();
+      // If both fields are now filled, this locks identity immediately —
+      // removes the session-bar picker chip AND shows the header badge —
+      // rather than waiting for some other unrelated re-render to pick it up.
+      renderSessionBar();
+      renderHeaderRight();
+      closeOverlay();
+    });
+  }
+}
+document.getElementById('btnSettings').addEventListener('click', ()=>{
+  // Both edit-confirmation gates reset locked every time Settings is
+  // freshly opened from the gear icon — see the note above their
+  // declaration. Only openSettings()'s own internal re-render calls (after
+  // a confirm) skip this, which is what keeps the unlock from re-locking
+  // itself mid-edit.
+  pgEditUnlocked = false;
+  urlEditUnlocked = false;
+  openSettings();
+});
+
+// Same "are you sure" pattern as openNewSessionConfirm() — Avbryt returns
+// to Settings unchanged, confirming flips the in-memory unlock flag and
+// re-renders Settings with that one field group now editable.
+function confirmEditUrl(){
+  openOverlay(`
+    <h2>Redigera Web App URL?</h2>
+    <p style="color:var(--muted);font-size:13.5px;margin-top:-8px;">
+      Fel URL gör att export slutar nå Sheetet helt, tyst — inga fångster
+      går förlorade (de ligger kvar i loggen), men inget sparas förrän URL:en
+      är rätt igen. Ändra bara om du vet att den ska ändras.
+    </p>
+    <div class="row-actions">
+      <button class="btn btn-secondary" id="cancelUrlEdit">Avbryt</button>
+      <button class="btn btn-primary" id="confirmUrlEdit" style="border-color:var(--bad);color:var(--bad);">Ja, redigera</button>
+    </div>
+  `);
+  document.getElementById('cancelUrlEdit').addEventListener('click', openSettings);
+  document.getElementById('confirmUrlEdit').addEventListener('click', ()=>{
+    urlEditUnlocked = true;
+    openSettings();
   });
 }
-document.getElementById('btnSettings').addEventListener('click', openSettings);
+
+function confirmEditPgToken(){
+  openOverlay(`
+    <h2>Redigera namn/token?</h2>
+    <p style="color:var(--muted);font-size:13.5px;margin-top:-8px;">
+      Namnet och token:en är låsta för att undvika en ändring av misstag —
+      fel token låser dig till fel identitet, och fångster loggas då i
+      någon annans namn. Fortsätt bara om du faktiskt ska byta.
+    </p>
+    <div class="row-actions">
+      <button class="btn btn-secondary" id="cancelPgEdit">Avbryt</button>
+      <button class="btn btn-primary" id="confirmPgEdit" style="border-color:var(--bad);color:var(--bad);">Ja, redigera</button>
+    </div>
+  `);
+  document.getElementById('cancelPgEdit').addEventListener('click', openSettings);
+  document.getElementById('confirmPgEdit').addEventListener('click', ()=>{
+    pgEditUnlocked = true;
+    openSettings();
+  });
+}
 
 // Clears only the service worker's Cache Storage (the app's own code files —
 // index.html, manifest, icons) so a stale installed copy re-fetches the
@@ -1614,12 +1725,21 @@ function showPgDebug(msg){
   el.textContent = '🔧 DEBUG (tillfälligt) [' + time + ']\n' + msg + '\n\n(tryck för att stänga)';
 }
 
+// Returns true only on a confirmed 201 from the server — performExport()
+// uses this (2026-08-31) as a second, independent trigger to clear the
+// grid, since a real device showed the Sheet path's own success handling
+// can silently not complete even when its underlying write actually
+// landed (stuck "Skickar…" button, row DID reach the Sheet, but catchLog
+// never got cleared — see TODO.md). false covers every non-success case,
+// INCLUDING "skipped, no token configured" — that must never be treated
+// as a green light to clear anything, or a device with no Postgres set up
+// at all would just silently stop resetting the grid on every export.
 async function postgresWrite(path, rowsArr){
   // No personal token configured on this device (⚙ → Postgres-token) —
   // skip entirely, don't even attempt the request. This is the actual
   // safety mechanism now (see the note above PG_BASE_URL): a device with
   // nothing configured can never write, misattribute, or leak anything.
-  if(!rowsArr.length || !config.pgToken) return;
+  if(!rowsArr.length || !config.pgToken) return false;
   try{
     const res = await fetch(PG_BASE_URL + path, {
       method: 'POST',
@@ -1639,7 +1759,9 @@ async function postgresWrite(path, rowsArr){
       const body = await res.text().catch(()=>'');
       console.warn('[Postgres dual-write] ' + path + ' rejected (' + res.status + '): ' + body);
       showPgDebug('AVVISAD: ' + path + '\nStatus: ' + res.status + '\nSvar: ' + (body || '(tomt)'));
+      return false;
     }
+    return true;
   } catch(err){
     // Unreachable — offline, phone not on the tailnet yet, server down.
     // Expected during the beta rollout; the Sheet export is still the
@@ -1647,6 +1769,7 @@ async function postgresWrite(path, rowsArr){
     // long-term (hence showPgDebug being temporary, not a permanent UI element).
     console.warn('[Postgres dual-write] ' + path + ' unreachable (offline or not on the tailnet?):', err);
     showPgDebug('ONÅBAR: ' + path + '\n' + (err && err.message ? err.message : String(err)));
+    return false;
   }
 }
 
@@ -1830,7 +1953,30 @@ async function performExport(){
 
   // See the comment above pgWrites — this is what actually keeps the two
   // dual-write fetches alive long enough to complete on a real device.
-  await Promise.allSettled(pgWrites);
+  const [catchesResult, platserResult] = await Promise.allSettled(pgWrites);
+
+  // Second, independent trigger to clear the grid (2026-08-31): a real
+  // device showed the Sheet path above can land its write successfully
+  // (row actually reaches the Sheet) while its own success-handling code
+  // still somehow doesn't complete (stuck "Skickar…", catchLog left
+  // un-cleared) — see TODO.md for the full incident. Rather than chase
+  // that root cause blind, treat Postgres confirmation as an equally
+  // valid, independent signal to clear — whichever destination confirms
+  // first wins, so a hiccup in one path's UI handling can't strand data
+  // that's already safely written. Only acts if there's still something
+  // to clear — a harmless no-op on the normal path where the Sheet
+  // branch above already cleared everything.
+  const pgCatchesOk = catchesResult.status === 'fulfilled' && catchesResult.value === true;
+  const pgPlatserOk = platserResult.status === 'fulfilled' && platserResult.value === true;
+  let clearedByPg = false;
+  if(pgCatchesOk && catchLog.length){ catchLog = []; clearedByPg = true; }
+  if(pgPlatserOk && pendingPlatser.length){ pendingPlatser = []; clearedByPg = true; }
+  if(clearedByPg){
+    saveAll();
+    renderGrid();
+    renderHeaderRight();
+    btn.disabled = (catchLog.length===0 && pendingPlatser.length===0);
+  }
 }
 
 // ---------- Live Plats sync ----------
