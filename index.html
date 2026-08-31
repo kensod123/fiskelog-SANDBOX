@@ -673,8 +673,7 @@ if (config.pgToken === undefined) config.pgToken = '';
 // "are you sure" before becoming editable. In-memory only, on purpose —
 // resets to locked every time Settings is freshly opened from ⚙, not
 // persisted, so a confirmation never "sticks" past that one visit.
-let pgEditUnlocked = false;
-let urlEditUnlocked = false;
+let settingsEditUnlocked = false;
 // Timestamp of the last successful Sheet export — powers the header status
 // chip's "senast synkad X sedan" display (see renderHeaderRight()).
 if (config.lastSyncAt === undefined) config.lastSyncAt = null;
@@ -1052,8 +1051,16 @@ function openFiskarePicker(){
 
 function openSettings(){
   const identityIsLocked = identityLocked();
-  const pgLocked = identityIsLocked && !pgEditUnlocked;
-  const urlLocked = !urlEditUnlocked;
+  const settingsLocked = !settingsEditUnlocked;
+  const urlLocked = settingsLocked;
+  const pgLocked = identityIsLocked && settingsLocked;
+  // One shared Redigera button unlocks both field groups at once (2026-
+  // 08-31, consolidated from two separate buttons — this is one visual
+  // section now, so one gate makes more sense than two). Only shown when
+  // there's actually something locked to unlock — e.g. before identity is
+  // set, pgLocked is always false, so the button (if URL is still locked)
+  // only needs to cover URL that one time.
+  const showEditButton = urlLocked || pgLocked;
 
   const urlFieldsHTML = urlLocked ? `
     <div class="field">
@@ -1064,7 +1071,6 @@ function openSettings(){
       <label>Delad nyckel (valfritt)</label>
       <input type="text" value="${config.secret||''}" readonly style="opacity:.6;">
     </div>
-    <button class="btn btn-secondary" id="fUrlEdit" style="width:100%;">✏️ Redigera</button>
   ` : `
     <div class="field">
       <label>Web App URL</label>
@@ -1102,7 +1108,6 @@ function openSettings(){
       <label>Personlig token</label>
       <input type="text" value="${config.pgToken||''}" readonly style="opacity:.6;">
     </div>
-    <button class="btn btn-secondary" id="fPgEdit" style="width:100%;">✏️ Redigera namn/token</button>
   ` : `
     <div class="field">
       <label>Ditt namn</label>
@@ -1142,6 +1147,7 @@ function openSettings(){
     ${urlFieldsHTML}
     ${registrationSectionHTML}
     ${pgTokenFieldsHTML}
+    ${showEditButton ? `<button class="btn btn-secondary" id="fSettingsEdit" style="width:100%;">✏️ Redigera</button>` : ''}
 
     <hr style="border-color:var(--border);margin:16px 0;">
 
@@ -1168,9 +1174,11 @@ function openSettings(){
   document.getElementById('btnClearCache').addEventListener('click', confirmClearAppCache);
   document.getElementById('btnPgTest').addEventListener('click', runPgIsolationTest);
 
-  if(urlLocked){
-    document.getElementById('fUrlEdit').addEventListener('click', confirmEditUrl);
-  } else {
+  if(showEditButton){
+    document.getElementById('fSettingsEdit').addEventListener('click', confirmEditSettings);
+  }
+
+  if(!urlLocked){
     document.getElementById('fSave').addEventListener('click', ()=>{
       const newUrl = document.getElementById('fUrl').value.trim();
       config.webAppUrl = newUrl;
@@ -1188,9 +1196,7 @@ function openSettings(){
     document.getElementById('fRegSubmit').addEventListener('click', submitPostgresRegistration);
   }
 
-  if(pgLocked){
-    document.getElementById('fPgEdit').addEventListener('click', confirmEditPgToken);
-  } else {
+  if(!pgLocked){
     document.getElementById('fPgSave').addEventListener('click', ()=>{
       config.pgToken = document.getElementById('fPgToken').value.trim();
       config.registeredName = document.getElementById('fPgName').value.trim();
@@ -1205,55 +1211,33 @@ function openSettings(){
   }
 }
 document.getElementById('btnSettings').addEventListener('click', ()=>{
-  // Both edit-confirmation gates reset locked every time Settings is
-  // freshly opened from the gear icon — see the note above their
-  // declaration. Only openSettings()'s own internal re-render calls (after
-  // a confirm) skip this, which is what keeps the unlock from re-locking
-  // itself mid-edit.
-  pgEditUnlocked = false;
-  urlEditUnlocked = false;
+  // Resets locked every time Settings is freshly opened from the gear
+  // icon — see the note above its declaration. Only openSettings()'s own
+  // internal re-render calls (after a confirm) skip this, which is what
+  // keeps the unlock from re-locking itself mid-edit.
+  settingsEditUnlocked = false;
   openSettings();
 });
 
 // Same "are you sure" pattern as openNewSessionConfirm() — Avbryt returns
-// to Settings unchanged, confirming flips the in-memory unlock flag and
-// re-renders Settings with that one field group now editable.
-function confirmEditUrl(){
+// to Settings unchanged, confirming flips the shared in-memory unlock flag
+// and re-renders Settings with both field groups now editable.
+function confirmEditSettings(){
   openOverlay(`
-    <h2>Redigera Web App URL?</h2>
+    <h2>Redigera inställningar?</h2>
     <p style="color:var(--muted);font-size:13.5px;margin-top:-8px;">
-      Fel URL gör att export slutar nå Sheetet helt, tyst — inga fångster
-      går förlorade (de ligger kvar i loggen), men inget sparas förrän URL:en
-      är rätt igen. Ändra bara om du vet att den ska ändras.
+      Web App URL, Namn och Token är låsta för att undvika ändringar av
+      misstag — fel URL stoppar export tyst, fel token låser dig till fel
+      identitet. Fortsätt bara om du faktiskt ska ändra något av detta.
     </p>
     <div class="row-actions">
-      <button class="btn btn-secondary" id="cancelUrlEdit">Avbryt</button>
-      <button class="btn btn-primary" id="confirmUrlEdit" style="border-color:var(--bad);color:var(--bad);">Ja, redigera</button>
+      <button class="btn btn-secondary" id="cancelSettingsEdit">Avbryt</button>
+      <button class="btn btn-primary" id="confirmSettingsEdit" style="border-color:var(--bad);color:var(--bad);">Ja, redigera</button>
     </div>
   `);
-  document.getElementById('cancelUrlEdit').addEventListener('click', openSettings);
-  document.getElementById('confirmUrlEdit').addEventListener('click', ()=>{
-    urlEditUnlocked = true;
-    openSettings();
-  });
-}
-
-function confirmEditPgToken(){
-  openOverlay(`
-    <h2>Redigera namn/token?</h2>
-    <p style="color:var(--muted);font-size:13.5px;margin-top:-8px;">
-      Namnet och token:en är låsta för att undvika en ändring av misstag —
-      fel token låser dig till fel identitet, och fångster loggas då i
-      någon annans namn. Fortsätt bara om du faktiskt ska byta.
-    </p>
-    <div class="row-actions">
-      <button class="btn btn-secondary" id="cancelPgEdit">Avbryt</button>
-      <button class="btn btn-primary" id="confirmPgEdit" style="border-color:var(--bad);color:var(--bad);">Ja, redigera</button>
-    </div>
-  `);
-  document.getElementById('cancelPgEdit').addEventListener('click', openSettings);
-  document.getElementById('confirmPgEdit').addEventListener('click', ()=>{
-    pgEditUnlocked = true;
+  document.getElementById('cancelSettingsEdit').addEventListener('click', openSettings);
+  document.getElementById('confirmSettingsEdit').addEventListener('click', ()=>{
+    settingsEditUnlocked = true;
     openSettings();
   });
 }
@@ -1830,12 +1814,17 @@ async function submitPostgresRegistration(){
     if(res.status === 201){
       showFeedback('✅ Registrerad som ' + fiskare + '! Väntar på att Kecke godkänner dig — han skickar sedan en personlig token direkt till dig (klistras in nedanför under "Postgres-token").', true);
       document.getElementById('fRegEmail').value = '';
-      // Remembered locally purely as a convenience pre-fill for the
-      // Postgres-token section below (and this form, if reopened) — has
-      // no effect until a token also gets entered (see the identity-lock
-      // logic in fiskareChipHTML()).
+      // Remembered locally as a convenience pre-fill for the Postgres-token
+      // section below — has no effect until a token also gets entered (see
+      // the identity-lock logic in fiskareChipHTML()). Also written
+      // straight into that field's DOM value right now (2026-08-31), not
+      // just saved for next time Settings reopens — it's the same overlay,
+      // still open, so there's no reason to make someone retype a name
+      // they just typed two fields up.
       config.registeredName = fiskare;
       saveAll();
+      const pgNameField = document.getElementById('fPgName');
+      if(pgNameField) pgNameField.value = fiskare;
     } else if(res.status === 409){
       // fishing.users has TWO separate unique constraints (email, fiskare)
       // as of 2026-08-31 — a name collision would otherwise silently merge
