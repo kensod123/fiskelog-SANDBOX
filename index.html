@@ -1162,17 +1162,9 @@ function openSettings(){
     <button class="btn btn-secondary" id="btnClearCache" style="width:100%;">
       🔄 Rensa app-cache &amp; ladda om
     </button>
-
-    <!-- TEMPORARY DEBUG (2026-08-29): isolates the raw Postgres fetch from
-         everything else — see runPgIsolationTest(). REMOVE once the
-         dual-write root cause is confirmed fixed. -->
-    <button class="btn btn-secondary" id="btnPgTest" style="width:100%;margin-top:10px;background:#ff6b35;color:#1a0800;">
-      🔧 PG-isolationstest (tillfällig)
-    </button>
   `);
   document.getElementById('btnNewPlats').addEventListener('click', openNewPlatsForm);
   document.getElementById('btnClearCache').addEventListener('click', confirmClearAppCache);
-  document.getElementById('btnPgTest').addEventListener('click', runPgIsolationTest);
 
   if(showEditButton){
     document.getElementById('fSettingsEdit').addEventListener('click', confirmEditSettings);
@@ -1309,43 +1301,46 @@ async function clearAppCache(){
 // consistent instead of drifting into near-duplicate spellings over time.
 const ZON_LIST = ['inomskärs','mellanskärs','ytterskärs'];
 
-function openNewPlatsForm(){
+// prefill lets confirmSaveNewPlats() send you back to this exact form with
+// everything you'd already typed still in place, if you cancel the "are you
+// sure" step below rather than losing it back to a blank form.
+function openNewPlatsForm(prefill){
+  prefill = prefill || {};
   openOverlay(`
     <h2>Ny plats</h2>
     <p style="color:var(--muted);font-size:12.5px;margin-top:-8px;">
       Sparas på telefonen och skickas till Platser-fliken vid nästa export.
-      Bara namnet krävs — fyll i resten senare om du inte har det till hands nu.
+      Namn och Google coordinates krävs — fyll i resten senare om du inte
+      har det till hands nu.
     </p>
     <div class="field">
       <label>Namn (Plats-ID) *</label>
-      <input type="text" id="npNamn" placeholder="t.ex. Kalles Grund">
+      <input type="text" id="npNamn" placeholder="t.ex. Kalles Grund" value="${prefill.namn||''}">
     </div>
     <div class="field">
-      <label>Google coordinates</label>
-      <input type="text" id="npCoord" placeholder="58,8704299, 17,5717571">
+      <label>Google coordinates *</label>
+      <input type="text" id="npCoord" placeholder="58,8704299, 17,5717571" value="${prefill.coord||''}">
     </div>
     <div class="field">
       <label>Skärgårdszon</label>
       <select id="npZon">
         <option value="">— Ej valt —</option>
-        ${ZON_LIST.map(z=>`<option value="${z}">${z}</option>`).join('')}
+        ${ZON_LIST.map(z=>`<option value="${z}" ${z===prefill.zon?'selected':''}>${z}</option>`).join('')}
       </select>
     </div>
     <div class="field">
       <label>Djup (m)</label>
-      <input type="number" inputmode="decimal" min="0" step="0.1" id="npDjup" placeholder="t.ex. 4.5">
+      <input type="number" inputmode="decimal" min="0" step="0.1" id="npDjup" placeholder="t.ex. 4.5" value="${prefill.djup!=null?prefill.djup:''}">
     </div>
     <div class="field">
       <label>Bottentyp</label>
-      <input type="text" id="npBotten" placeholder="t.ex. mjuk/gräs/vass">
+      <input type="text" id="npBotten" placeholder="t.ex. mjuk/gräs/vass" value="${prefill.botten||''}">
     </div>
     <div class="field">
       <label>Notering</label>
-      <input type="text" id="npNotering" placeholder="valfritt">
+      <input type="text" id="npNotering" placeholder="valfritt" value="${prefill.notering||''}">
     </div>
-    <div id="npError" style="color:var(--bad); font-size:12.5px; margin:-8px 0 12px; display:none;">
-      Namn krävs.
-    </div>
+    <div id="npError" style="color:var(--bad); font-size:12.5px; margin:-8px 0 12px; display:none;"></div>
     <div class="row-actions">
       <button class="btn btn-secondary" id="npBack">Avbryt</button>
       <button class="btn btn-primary" id="npSave">Spara plats</button>
@@ -1354,27 +1349,73 @@ function openNewPlatsForm(){
   document.getElementById('npBack').addEventListener('click', closeOverlay);
   document.getElementById('npSave').addEventListener('click', ()=>{
     const namn = document.getElementById('npNamn').value.trim();
+    const coord = document.getElementById('npCoord').value.trim();
+    const errorEl = document.getElementById('npError');
+    // Coordinates made mandatory 2026-09-01 (Kecke's call, tied to Björn
+    // finishing a coordinate backfill on all existing platser first) —
+    // only applies to NEW platser going forward, never touches historic
+    // rows already in the Sheet without coordinates.
     if(!namn){
-      document.getElementById('npError').style.display = 'block';
+      errorEl.textContent = 'Namn krävs.';
+      errorEl.style.display = 'block';
       return;
     }
+    if(!coord){
+      errorEl.textContent = 'Google coordinates krävs.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    errorEl.style.display = 'none';
     const djupRaw = document.getElementById('npDjup').value.trim();
     const djup = djupRaw === '' ? null : Number(djupRaw);
-    pendingPlatser.push({
-      id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
-      platsId: namn,
-      coordinates: document.getElementById('npCoord').value.trim() || null,
-      zon: document.getElementById('npZon').value || null,
+    confirmSaveNewPlats({
+      namn,
+      coord,
+      zon: document.getElementById('npZon').value,
       djup: (djup===null || Number.isNaN(djup)) ? null : djup,
-      bottentyp: document.getElementById('npBotten').value.trim() || null,
-      notering: document.getElementById('npNotering').value.trim() || null,
-      ts: new Date().toISOString()
+      botten: document.getElementById('npBotten').value.trim(),
+      notering: document.getElementById('npNotering').value.trim()
     });
+  });
+}
+
+// "Are you sure" step (2026-09-01) — a mis-typed name/coordinate here isn't
+// just a local mistake like most fields: it goes out to everyone's Plats
+// dropdown and into the Sheet. Same pattern as openNewSessionConfirm() and
+// the Settings edit-confirm — Avbryt goes back to the SAME form with
+// everything still filled in (via prefill above), not a blank one.
+function confirmSaveNewPlats(fields){
+  openOverlay(`
+    <h2>Spara ny plats?</h2>
+    <p style="color:var(--muted);font-size:13.5px;margin-top:-8px;">
+      Lägger till <b style="color:var(--text)">${fields.namn}</b> (${fields.coord})
+      i Plats-listan — valbar direkt på din telefon, och skickas till
+      sandbox-Sheetet${identityLocked() ? ' + fishing_sandbox' : ''} direkt
+      (annars vid nästa export om du är offline just nu).
+    </p>
+    <div class="row-actions">
+      <button class="btn btn-secondary" id="npCancelConfirm">Avbryt</button>
+      <button class="btn btn-primary" id="npConfirmSave">Ja, spara</button>
+    </div>
+  `);
+  document.getElementById('npCancelConfirm').addEventListener('click', ()=> openNewPlatsForm(fields));
+  document.getElementById('npConfirmSave').addEventListener('click', ()=>{
+    const entry = {
+      id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
+      platsId: fields.namn,
+      coordinates: fields.coord || null,
+      zon: fields.zon || null,
+      djup: fields.djup,
+      bottentyp: fields.botten || null,
+      notering: fields.notering || null,
+      ts: new Date().toISOString()
+    };
+    pendingPlatser.push(entry);
     // Make it selectable immediately on THIS phone, not just after the next
     // export + everyone else's live sync — you already know the name, no
     // reason to wait. Doesn't touch the pending-export queue above.
-    if(!effectivePlatsList.includes(namn)){
-      effectivePlatsList = [...effectivePlatsList, namn];
+    if(!effectivePlatsList.includes(fields.namn)){
+      effectivePlatsList = [...effectivePlatsList, fields.namn];
       localStorage.setItem(PLATS_CACHE_KEY, JSON.stringify(effectivePlatsList));
     }
     saveAll();
@@ -1382,7 +1423,37 @@ function openNewPlatsForm(){
     renderSessionBar(); // so the Plats dropdown offers the new name right away
     closeOverlay();
     showToast('Plats tillagd — valbar direkt i Plats-listan.');
+    // "Option 3" hybrid (2026-09-01): best-effort immediate broadcast, fired
+    // and forgotten — never awaited, never blocks this click handler. If it
+    // fails (offline, etc.) `entry` simply stays in pendingPlatser and goes
+    // out normally with the next full Exportera; nothing is lost either way.
+    broadcastPlatsNow(entry);
   });
+}
+
+// Fires the instant a new plats is saved, alongside it still riding along in
+// pendingPlatser for the next full Exportera as an offline safety net. Safe
+// to send twice on both destinations now: Code.gs's writeNewPlatser()
+// de-dupes by Plats-ID, and postgresWrite() sends 'Prefer: resolution=
+// merge-duplicates' specifically for '/platser' (see the comment there). The
+// point is speed — everyone else's dropdown + the Sheet should reflect a new
+// spot as soon as possible, not only once whoever added it happens to tap
+// Exportera for their catches too.
+async function broadcastPlatsNow(entry){
+  const platsForSheet = [{
+    platsId: entry.platsId, coordinates: entry.coordinates, zon: entry.zon,
+    djup: entry.djup, bottentyp: entry.bottentyp, notering: entry.notering
+  }];
+  try{
+    await fetch(config.webAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ rows: [], platser: platsForSheet, secret: config.secret || '' })
+    });
+  } catch(err){
+    console.warn('[Plats broadcast] Sheet unreachable, will retry with next export:', err);
+  }
+  await postgresWrite('/platser', [toPostgresPlats(entry)]);
 }
 
 // ---------- Session sheet (consolidates the old separate ☰/📊 buttons) ----------
@@ -1700,18 +1771,30 @@ async function postgresWrite(path, rowsArr){
   // nothing configured can never write, misattribute, or leak anything.
   if(!rowsArr.length || !config.pgToken) return false;
   try{
+    const headers = {
+      'Content-Profile': 'fishing_sandbox',
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + config.pgToken
+      // Deliberately NO "Prefer: return=representation" here — the
+      // fishing_writer role has no SELECT at all, and PostgREST's
+      // INSERT...RETURNING needs SELECT even for your own just-inserted
+      // row. A plain 201 with an empty body is success. See Homelab's
+      // LEARNING_LOG.md (search "write path") for the full story.
+    };
+    // A plats can now legitimately be sent twice (2026-09-01, "Option 3"
+    // hybrid): once immediately via broadcastPlatsNow() when it's saved,
+    // and again if that same entry still rides along in the next full
+    // Exportera as an offline safety net. plats_id is a plain PRIMARY KEY
+    // with no ON CONFLICT — this header (Homelab's suggestion) makes
+    // PostgREST turn a resend into a safe update instead of a 23505
+    // unique-violation error. Catches never need this — each one really is
+    // a new row, never deliberately resent.
+    if(path === '/platser'){
+      headers['Prefer'] = 'resolution=merge-duplicates';
+    }
     const res = await fetch(PG_BASE_URL + path, {
       method: 'POST',
-      headers: {
-        'Content-Profile': 'fishing_sandbox',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + config.pgToken
-        // Deliberately NO "Prefer: return=representation" here — the
-        // fishing_writer role has no SELECT at all, and PostgREST's
-        // INSERT...RETURNING needs SELECT even for your own just-inserted
-        // row. A plain 201 with an empty body is success. See Homelab's
-        // LEARNING_LOG.md (search "write path") for the full story.
-      },
+      headers,
       body: JSON.stringify(rowsArr)
     });
     if(!res.ok){
@@ -1729,42 +1812,6 @@ async function postgresWrite(path, rowsArr){
     console.warn('[Postgres dual-write] ' + path + ' unreachable (offline or not on the tailnet?):', err);
     showPgDebug('ONÅBAR: ' + path + '\n' + (err && err.message ? err.message : String(err)));
     return false;
-  }
-}
-
-// TEMPORARY DEBUG (added 2026-08-29 at Homelab's request): isolates the raw
-// Postgres fetch from EVERYTHING else — the Sheet export, the
-// Promise.allSettled timing fix, even showPgDebug()'s own rendering code
-// (which could in principle have its own bug independent of the actual
-// write). A single, fully-awaited fetch with one minimal hardcoded valid
-// row, result shown via plain alert() — no custom UI to doubt.
-// REMOVE once the dual-write root cause is confirmed fixed.
-async function runPgIsolationTest(){
-  if(!config.pgToken){
-    alert('PG-ISOLATIONSTEST\nIngen personlig token sparad ännu — fyll i "Personlig token" ovanför och tryck Spara token först.');
-    return;
-  }
-  const testRow = {
-    datum: todayISO(), tid: currentTime(), manad: currentManad(),
-    fiskare: session.fiskare, plats_id: 'Havsbadet', vattentemp: '15 – 18°C',
-    vindriktning: 'Ospecificerad', lufttryck: 'Ospecificerad',
-    lufttryckstrend: 'Ospecificerat', art: 'Abborre', storlek: 'Mellan',
-    vikt_g: null, langd_cm: null, drag: 'Sked'
-  };
-  try{
-    const res = await fetch(PG_BASE_URL + '/catches', {
-      method: 'POST',
-      headers: {
-        'Content-Profile': 'fishing_sandbox',
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + config.pgToken
-      },
-      body: JSON.stringify([testRow])
-    });
-    const body = await res.text().catch(()=>'(kunde inte läsa svarstext)');
-    alert('PG-ISOLATIONSTEST\nStatus: ' + res.status + '\nSvar: ' + (body || '(tomt — normalt vid 201)'));
-  } catch(err){
-    alert('PG-ISOLATIONSTEST\nFETCH KASTADE FEL (nådde aldrig servern):\n' + (err && err.message ? err.message : String(err)));
   }
 }
 
