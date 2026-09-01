@@ -267,18 +267,6 @@
     background:transparent; color:var(--muted);
   }
   .bar-btn{flex:none; color:var(--muted); padding:0 4px; font-size:9px; letter-spacing:0;}
-  /* Teaser/placeholder for a not-yet-built feature — deliberately looks
-     muted/inert like a disabled control, but stays a real, clickable
-     button (a genuinely disabled one wouldn't fire click at all) so
-     tapping it can still show the "kanske" popup. Two-line label, so it
-     overrides the single-line uppercase mono styling every other bar
-     button uses — reads as a distinct, still-informal teaser rather than
-     a real utilitarian action. */
-  .bar-btn-teaser{
-    flex-direction:column; gap:1px; color:var(--faint); opacity:.7;
-    text-transform:none; letter-spacing:normal; font-family:var(--sans);
-  }
-  .bar-btn-teaser small{font:400 8px var(--mono); letter-spacing:.04em; color:var(--faint);}
   .btn-export{
     border-color:var(--accent); color:var(--accent-300);
     box-shadow:0 0 16px rgba(145,132,217,.24); font-size:11px;
@@ -383,6 +371,79 @@
   .status{font-size:12px; text-align:center; padding:6px; color:var(--muted);}
   .status.ok{color:var(--good);}
   .status.err{color:var(--bad);}
+
+  /* ---------- NappNytt dashboard (2026-09-02) ----------
+     Prefixed nn- throughout so nothing here can collide with the sheet's
+     existing classes. Reuses the app's own --tokens directly (no separate
+     palette to keep in sync) — this is the same visual language proven in
+     the Python/HoloViz test render, ported 1:1. */
+  .nn-page{display:none;}
+  .nn-page.nn-active{display:block;}
+  .nn-nav{display:flex; width:100%; border-radius:8px; overflow:hidden; border:1px solid var(--border); margin-bottom:14px;}
+  .nn-nav button{
+    flex:1; background:var(--panel); color:var(--muted); border:none; padding:11px 0;
+    font:600 11px var(--mono); letter-spacing:.06em; text-transform:uppercase; cursor:pointer;
+  }
+  .nn-nav button + button{border-left:1px solid var(--border);}
+  .nn-nav button.nn-active{background:var(--accent-700); color:var(--text);}
+  .nn-label{font:600 10.5px var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--accent-300); margin:14px 0 8px;}
+  .nn-row{display:flex; gap:8px; margin-bottom:8px;}
+  .nn-row:last-child{margin-bottom:0;}
+  .nn-col{display:flex; flex-direction:column; gap:8px;}
+  .nn-card{
+    flex:1; min-width:0; background:var(--panel); border:1px solid var(--border); border-radius:6px;
+    box-shadow:0 6px 20px rgba(0,0,0,.35); box-sizing:border-box; padding:9px; overflow:hidden;
+  }
+  .nn-card-title{
+    /* Wraps instead of ellipsis-truncating (2026-09-02 fix, caught live-
+       testing on a real narrow card) — a longer title like "Fisketid
+       totalt & snitt" was clipping to "Fisketid totalt & …" on the
+       app's actual (narrower-than-the-prototype) card width. Titles are
+       short enough that 1-2 lines never crowds the value below it. */
+    font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-300);
+    margin:0; line-height:1.3; font-family:var(--mono);
+  }
+  .nn-card-value{font-size:20px; font-weight:600; color:var(--text); line-height:1.15; font-family:var(--mono); margin-top:3px;}
+  .nn-card-sub{font-size:10px; color:var(--muted2); margin-top:2px; font-family:var(--mono);}
+  .nn-card-note{font-size:9.5px; color:var(--faint); margin-top:2px; font-style:italic; font-family:var(--mono);}
+  .nn-chart-card{background:var(--panel); border:1px solid var(--border); border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.35); box-sizing:border-box; padding:9px; margin-bottom:8px;}
+  .nn-bars{display:flex; align-items:flex-end; gap:3px; height:140px; margin-top:8px; background:var(--panel2); border-radius:4px; padding:8px 4px 0;}
+  .nn-bar-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; min-width:0;}
+  .nn-bar{width:70%; background:var(--accent); border-radius:2px 2px 0 0; min-height:1px;}
+  .nn-bar-label{font-size:8px; color:var(--muted); margin-top:4px; font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%;}
+  .nn-hbars{display:flex; flex-direction:column; gap:8px; margin-top:8px; background:var(--panel2); border-radius:4px; padding:10px;}
+  .nn-hbar-row{display:flex; align-items:center; gap:8px;}
+  .nn-hbar-label{width:52px; flex:none; font-size:10px; color:var(--muted); font-family:var(--mono); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .nn-hbar-track{flex:1; height:16px; background:rgba(255,255,255,.04); border-radius:2px; overflow:hidden;}
+  .nn-hbar-fill{height:100%; background:var(--accent); border-radius:2px 0 0 2px;}
+  .nn-hbar-value{width:34px; flex:none; font-size:10px; color:var(--muted2); font-family:var(--mono);}
+  .nn-donut-wrap{display:flex; justify-content:center; margin-top:6px;}
+  .nn-legend{display:flex; flex-wrap:wrap; gap:5px 12px; justify-content:center; margin-top:10px;}
+  .nn-legend-item{display:flex; align-items:center; gap:5px;}
+  .nn-legend-swatch{width:9px; height:9px; border-radius:2px; flex:none;}
+  .nn-table{width:100%; border-collapse:collapse; table-layout:fixed; font-family:var(--mono);}
+  .nn-table th{
+    text-align:left; color:var(--accent-300); font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+    font-size:9px; padding:4px 6px; border-bottom:1px solid var(--border);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .nn-table td{color:var(--text); padding:4px 6px; font-size:10.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .nn-table tr:nth-child(even) td{background:var(--panel2);}
+  .nn-heat-wrap{overflow:hidden; margin-top:8px;}
+  .nn-heat-row{display:flex; align-items:stretch; margin-bottom:2px;}
+  .nn-heat-plats{width:74px; flex:none; font-size:9px; color:var(--muted); display:flex; align-items:center; padding-right:4px; font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .nn-heat-cell{flex:1; min-width:0; aspect-ratio:1.1; display:flex; align-items:center; justify-content:center; font-size:9px; color:var(--text); font-family:var(--mono); border-radius:1px; margin-left:2px;}
+  .nn-heat-months{display:flex; margin-top:2px;}
+  .nn-heat-month-label{flex:1; min-width:0; font-size:8px; color:var(--muted); text-align:center; font-family:var(--mono); margin-left:2px;}
+  .nn-session-card{background:var(--panel); border:1px solid var(--border); border-radius:6px; box-shadow:0 6px 20px rgba(0,0,0,.35); box-sizing:border-box; padding:9px; margin-bottom:10px;}
+  .nn-mini-label{font-size:8.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--muted2); margin:0; font-family:var(--mono);}
+  /* Wraps rather than ellipsis-truncating, same fix/reason as .nn-card-
+     title above — "1025 – 1027 hPa" was clipping to "1025 – 1027 …" in
+     the 4-column session-card mini-stat row. */
+  .nn-mini-value{font-size:13px; font-weight:600; color:var(--text); margin-top:1px; line-height:1.25; font-family:var(--mono);}
+  .nn-meta-line{font-size:9.5px; color:var(--muted); margin-top:6px; line-height:1.5; font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .nn-loading{text-align:center; padding:40px 10px; color:var(--muted); font:500 12px var(--mono);}
+  .nn-error{text-align:center; padding:24px 10px; color:var(--bad); font:500 12px var(--mono);}
 </style>
 </head>
 <body>
@@ -408,9 +469,7 @@
 </div>
 
 <footer>
-  <button class="btn bar-btn bar-btn-teaser" id="btnNappNytt" type="button">
-    <span>NappNytt</span><small>– kommer snart</small>
-  </button>
+  <button class="btn bar-btn" id="btnNappNytt" type="button">📊 NAPPNYTT</button>
   <button class="btn bar-btn" id="btnSession">☰ SESSION</button>
   <button class="btn bar-btn btn-export" id="btnExport">↑ EXPORTERA</button>
   <button class="btn bar-btn" id="btnSettings">⚙ INSTÄLLNINGAR</button>
@@ -1365,6 +1424,17 @@ function openNewPlatsForm(prefill){
       errorEl.style.display = 'block';
       return;
     }
+    // Catches a format parseCoordinates() genuinely can't handle (e.g. the
+    // DMS "58°52'22.1"N 17°36'56.8"E" style some phones/PCs also offer)
+    // before it gets saved as text but silently stores null/null for the
+    // actual lat/long — exactly the failure mode mandatory coordinates was
+    // meant to prevent. Long/lat digit-degree decimal formats (the normal
+    // "long-press a pin, copy coordinates" result) all pass fine.
+    if(parseCoordinates(coord).latitude === null){
+      errorEl.textContent = 'Kunde inte tolka koordinaterna — kopiera direkt från Google Maps (t.ex. "58,8704299, 17,5717571" eller "58.8704299,17.5717571"), inte gradformat (°′″).';
+      errorEl.style.display = 'block';
+      return;
+    }
     errorEl.style.display = 'none';
     const djupRaw = document.getElementById('npDjup').value.trim();
     const djup = djupRaw === '' ? null : Number(djupRaw);
@@ -1479,17 +1549,466 @@ function openSessionSheet(){
 }
 document.getElementById('btnSession').addEventListener('click', openSessionSheet);
 
-// Teaser for a not-yet-built feature — grayed out on purpose, but a real
-// button (not the disabled attribute) specifically so it can still show
-// this popup when tapped.
-document.getElementById('btnNappNytt').addEventListener('click', ()=>{
-  openOverlay(`
-    <h2>NappNytt</h2>
-    <p style="color:var(--muted);font-size:14px;margin-top:-6px;">Kanske 😏</p>
-    <button class="btn btn-secondary" id="nappNyttClose" style="width:100%;">Stäng</button>
-  `);
-  document.getElementById('nappNyttClose').addEventListener('click', closeOverlay);
-});
+// ---------- NappNytt dashboard (2026-09-02) ----------
+// Ported from the Python/HoloViz test render built earlier the same day —
+// same stats, same "same boat" hours logic, same honesty rules (real
+// numbers over hiding thin samples, "–" only for genuinely unmeasurable
+// values), same visual language, now as vanilla HTML/CSS/SVG inside the
+// existing .sheet overlay instead of a server-rendered Bokeh app. No chart
+// library — the app has never used one (the species-share bars on the
+// clicker grid are plain CSS width%), so bars/donut/heatmap are hand-
+// rolled here the same way, not a new dependency.
+const NN_SIZE_POINTS = { Liten: 1, Mellan: 3, Stor: 8 };
+const NN_MONTH_ORDER = ['Januari','Februari','Mars','April','Maj','Juni','Juli','Augusti','September','Oktober','November','December'];
+const NN_MONTH_ABBR = {Januari:'Jan',Februari:'Feb',Mars:'Mar',April:'Apr',Maj:'Maj',Juni:'Jun',Juli:'Jul',Augusti:'Aug',September:'Sep',Oktober:'Okt',November:'Nov',December:'Dec'};
+const NN_WEEKDAY_SV = ['Mån','Tis','Ons','Tors','Fre','Lör','Sön'];
+const NN_MONTH_ABBR_SV = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
+const NN_SPECIES_COLORS = { Abborre:'#9184d9', Gädda:'#5aa8c9', Gös:'#d98c5a', Havsöring:'#6bbf8f', Vitfisk:'#c96b8f' };
+const NN_FALLBACK_RAMP = ['#c9b95a','#9a6bc9','#6b8fc9','#c98a6b','#8fc9b9'];
+const NN_HEAT_LOW = [0x5c,0x24,0x20];
+const NN_HEAT_HIGH = [0xd9,0x53,0x4f]; // matches --bad
+
+function nnTimeToMinutes(hms){
+  if(!hms) return null;
+  const p = String(hms).split(':').map(Number);
+  return p[0]*60 + (p[1]||0) + (p[2]||0)/60;
+}
+function nnMinutesToHM(mins){
+  const h = Math.floor(mins/60), m = Math.round(mins%60);
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+function nnGroupBy(arr, keyFn){
+  const m = new Map();
+  arr.forEach(x=>{ const k=keyFn(x); if(!m.has(k)) m.set(k,[]); m.get(k).push(x); });
+  return m;
+}
+function nnBestBy(arr, field){
+  const m = new Map();
+  arr.forEach(r=>{ m.set(r[field], (m.get(r[field])||0) + r.poang); });
+  let best=null, bestVal=-Infinity;
+  m.forEach((v,k)=>{ if(v>bestVal){bestVal=v;best=k;} });
+  return best!=null ? [best, Math.round(bestVal)] : ['–', 0];
+}
+function nnRgbToHex(rgb){
+  return '#'+rgb.map(c=>Math.max(0,Math.min(255,Math.round(c))).toString(16).padStart(2,'0')).join('');
+}
+function nnHeatColor(v, max){
+  if(v<=0) return 'var(--panel2)';
+  const t = Math.min(v/max, 1);
+  return nnRgbToHex(NN_HEAT_LOW.map((lo,i)=> lo + (NN_HEAT_HIGH[i]-lo)*t));
+}
+
+// Mirrors the Python prototype's stats computation 1:1 — see
+// dashboard_app.py (scratchpad, 2026-09-02) for the original with full
+// rationale comments on every rule (same-boat hours, >=0.5h rate
+// exclusion, honest "–" thresholds, etc.).
+function computeDashboardStats(allRows){
+  const rows = allRows.filter(r=>r.art);
+  rows.forEach(r=>{ r.poang = NN_SIZE_POINTS[r.storlek] || 0; });
+
+  const total = rows.length;
+  const sizeCounts = {Liten:0,Mellan:0,Stor:0};
+  rows.forEach(r=>{ if(sizeCounts[r.storlek]!=null) sizeCounts[r.storlek]++; });
+  const sizePct = {
+    Liten: total ? Math.round(sizeCounts.Liten/total*100) : 0,
+    Mellan: total ? Math.round(sizeCounts.Mellan/total*100) : 0,
+    Stor: total ? Math.round(sizeCounts.Stor/total*100) : 0,
+  };
+
+  const dated = rows.filter(r=>r.tid && r.datum);
+  const nDated = dated.length;
+  const byDatum = nnGroupBy(dated, r=>r.datum);
+
+  // Day-level (Fisketurslogg's own grain — one row per calendar day,
+  // Start/Slut across EVERYONE's catches that day combined): totals,
+  // avg session, and fisk/timme all come from here only.
+  const daySessions = [];
+  byDatum.forEach((g, datum)=>{
+    const times = g.map(r=>nnTimeToMinutes(r.tid));
+    const start = Math.min(...times), slut = Math.max(...times);
+    daySessions.push({ datum, fangster:g.length, poang:g.reduce((s,r)=>s+r.poang,0), timmar:(slut-start)/60 });
+  });
+  const totalDatedHours = daySessions.reduce((s,d)=>s+d.timmar,0);
+  const nDatedDays = daySessions.length;
+  const qualDays = daySessions.filter(d=>d.timmar>=0.5);
+  const qualFangster = qualDays.reduce((s,d)=>s+d.fangster,0);
+  const qualTimmar = qualDays.reduce((s,d)=>s+d.timmar,0);
+  const fiskPerTimme = qualTimmar ? qualFangster/qualTimmar : 0;
+
+  // Per-fiskare poäng/h: each fiskare active on a day is credited that
+  // SAME shared day-level Timmar (same boat), with their own poäng.
+  const dayTimmar = new Map(daySessions.map(d=>[d.datum, d.timmar]));
+  const fiskareDayMap = nnGroupBy(dated, r=>r.fiskare+''+r.datum);
+  const fiskareDay = [];
+  fiskareDayMap.forEach((g)=>{
+    fiskareDay.push({ fiskare:g[0].fiskare, poang:g.reduce((s,r)=>s+r.poang,0), timmar:dayTimmar.get(g[0].datum) });
+  });
+  const qualFd = fiskareDay.filter(d=>d.timmar>=0.5);
+  const fiskareAggMap = nnGroupBy(qualFd, d=>d.fiskare);
+  const fiskareRate = [];
+  fiskareAggMap.forEach((g, fiskare)=>{
+    const poang = g.reduce((s,d)=>s+d.poang,0), timmar = g.reduce((s,d)=>s+d.timmar,0);
+    fiskareRate.push({ fiskare, poang, timmar, poangPerH: poang/timmar });
+  });
+  fiskareRate.sort((a,b)=>b.poangPerH-a.poangPerH);
+
+  // Plats/condition hours: grouped by (datum, plats, conditions) — no
+  // fiskare — so a place several anglers shared one day counts once.
+  const placeMap = nnGroupBy(dated, r=>[r.datum,r.plats,r.lufttryck,r.vindriktning,r.lufttryckstrend].join(''));
+  const placeSessions = [];
+  placeMap.forEach((g)=>{
+    const times = g.map(r=>nnTimeToMinutes(r.tid));
+    placeSessions.push({ plats:g[0].plats, lufttryck:g[0].lufttryck, vindriktning:g[0].vindriktning,
+      lufttryckstrend:g[0].lufttryckstrend, timmar:(Math.max(...times)-Math.min(...times))/60 });
+  });
+  function hoursBy(field){
+    const m = new Map();
+    placeSessions.forEach(p=>{ m.set(p[field], (m.get(p[field])||0)+p.timmar); });
+    return m;
+  }
+  const platsHours = hoursBy('plats'), lufttryckHours = hoursBy('lufttryck');
+  const vindriktningHours = hoursBy('vindriktning'), lufttryckstrendHours = hoursBy('lufttryckstrend');
+
+  const bestLufttryck = nnBestBy(dated, 'lufttryck');
+  const bestVindriktning = nnBestBy(dated, 'vindriktning');
+  const bestLufttryckstrend = nnBestBy(dated, 'lufttryckstrend');
+  dated.forEach(r=>{
+    const h = Number(String(r.tid).split(':')[0]);
+    r.tidfonster = (h>=5&&h<9) ? 'Morgon (05-09)' : (h>=9&&h<12) ? 'Förmiddag (09-12)' :
+      (h>=12&&h<17) ? 'Eftermiddag (12-17)' : (h>=17&&h<21) ? 'Kväll (17-21)' : 'Natt (21-05)';
+  });
+  const bestTidfonster = nnBestBy(dated, 'tidfonster');
+
+  // .filter(r=>r.X) guards below match pandas' Series.value_counts()
+  // default (dropna=True) — the Python prototype never showed a blank/
+  // null bar for the handful of historic rows missing Fiskare or Månad;
+  // a plain JS Map.set(undefined, ...) doesn't drop that the same way,
+  // which is exactly what put a stray "null" bar into Fångster per
+  // fiskare here until this was caught during testing.
+  const monthCounts = new Map();
+  rows.filter(r=>r.manad).forEach(r=>{ monthCounts.set(r.manad, (monthCounts.get(r.manad)||0)+1); });
+  let bestMonth='–', bestMonthN=0;
+  monthCounts.forEach((v,k)=>{ if(v>bestMonthN){bestMonthN=v;bestMonth=k;} });
+
+  const fiskareCounts = new Map();
+  rows.filter(r=>r.fiskare).forEach(r=>{ fiskareCounts.set(r.fiskare, (fiskareCounts.get(r.fiskare)||0)+1); });
+
+  const artCountsMap = new Map();
+  rows.forEach(r=>{ artCountsMap.set(r.art, (artCountsMap.get(r.art)||0)+1); });
+  const artCountsArr = [...artCountsMap.entries()].sort((a,b)=>b[1]-a[1]);
+
+  const platsPoangAll = new Map();
+  rows.forEach(r=>{ if(r.plats && r.plats!=='Ospecificerad') platsPoangAll.set(r.plats, (platsPoangAll.get(r.plats)||0)+r.poang); });
+  let bestPlats='–', bestPlatsPoang=0;
+  platsPoangAll.forEach((v,k)=>{ if(v>bestPlatsPoang){bestPlatsPoang=v;bestPlats=k;} });
+
+  const records = [];
+  nnGroupBy(rows, r=>r.art).forEach((g, art)=>{
+    const withVikt = g.filter(r=>r.vikt!=null && r.vikt!=='');
+    if(withVikt.length){
+      const top = withVikt.reduce((a,b)=>Number(b.vikt)>Number(a.vikt)?b:a);
+      records.push({ art, vikt:Math.round(Number(top.vikt)), langd:(top.langd!=null&&top.langd!=='')?Math.round(Number(top.langd)):'–', fiskare:top.fiskare, plats:top.plats });
+    } else {
+      records.push({ art, vikt:'–', langd:'–', fiskare:'–', plats:'–' });
+    }
+  });
+  records.sort((a,b)=>a.art.localeCompare(b.art,'sv'));
+
+  const platsStatsMap = new Map();
+  rows.forEach(r=>{
+    if(!r.plats || r.plats==='Ospecificerad') return;
+    if(!platsStatsMap.has(r.plats)) platsStatsMap.set(r.plats, {poang:0,fangster:0});
+    const s = platsStatsMap.get(r.plats); s.poang+=r.poang; s.fangster+=1;
+  });
+  const platsStatsArr = [...platsStatsMap.entries()].map(([plats,s])=>({plats,poang:s.poang,fangster:s.fangster}))
+    .sort((a,b)=>b.poang-a.poang).slice(0,10);
+  const top10Names = platsStatsArr.map(p=>p.plats);
+
+  const heatMap = new Map();
+  rows.forEach(r=>{
+    if(!top10Names.includes(r.plats)) return;
+    const k = r.plats+''+r.manad;
+    heatMap.set(k, (heatMap.get(k)||0)+r.poang);
+  });
+
+  const dayRows = [];
+  byDatum.forEach((g, datum)=>{
+    const times = g.map(r=>nnTimeToMinutes(r.tid));
+    const start = Math.min(...times), slut = Math.max(...times);
+    const timmar = (slut-start)/60, fangster = g.length;
+    const fiskH = timmar>=0.5 ? fangster/timmar : null;
+    const sizeCountsDay = {Liten:0,Mellan:0,Stor:0};
+    g.forEach(r=>{ if(sizeCountsDay[r.storlek]!=null) sizeCountsDay[r.storlek]++; });
+    const withVikt = g.filter(r=>r.vikt!=null && r.vikt!=='');
+    let storstTxt = '–';
+    if(withVikt.length){
+      const top = withVikt.reduce((a,b)=>Number(b.vikt)>Number(a.vikt)?b:a);
+      storstTxt = Math.round(Number(top.vikt))+' g';
+      if(top.langd!=null && top.langd!=='') storstTxt += ' / '+Math.round(Number(top.langd))+' cm';
+    }
+    const platsPoangDay = new Map();
+    g.forEach(r=>{ if(r.plats!=='Ospecificerad') platsPoangDay.set(r.plats, (platsPoangDay.get(r.plats)||0)+r.poang); });
+    let bpDag='–', bpDagPoang=0;
+    platsPoangDay.forEach((v,k)=>{ if(v>bpDagPoang){bpDagPoang=v;bpDag=k;} });
+    const dragCounts = new Map();
+    g.forEach(r=>{ if(r.drag) dragCounts.set(r.drag, (dragCounts.get(r.drag)||0)+1); });
+    let vDrag='–', vDragN=0;
+    dragCounts.forEach((v,k)=>{ if(v>vDragN){vDragN=v;vDrag=k;} });
+    const artCountsDay = new Map();
+    g.forEach(r=>{ artCountsDay.set(r.art, (artCountsDay.get(r.art)||0)+1); });
+    let vArt='–', vArtN=0;
+    artCountsDay.forEach((v,k)=>{ if(v>vArtN){vArtN=v;vArt=k;} });
+    const vindCounts = new Map();
+    g.forEach(r=>{ if(r.vindriktning) vindCounts.set(r.vindriktning, (vindCounts.get(r.vindriktning)||0)+1); });
+    let vindMain='–', vindMainN=0;
+    vindCounts.forEach((v,k)=>{ if(v>vindMainN){vindMainN=v;vindMain=k;} });
+    const vindOthers = [...vindCounts.keys()].filter(v=>v!==vindMain);
+    const vindTxt = vindMain + (vindOthers.length ? ` (även: ${vindOthers.join(', ')})` : '');
+    const vattentempRow = g.find(r=>r.vattentemp);
+    const lufttryckRow = g.find(r=>r.lufttryck);
+    const lufttryckstrendRow = g.find(r=>r.lufttryckstrend);
+    dayRows.push({
+      datum, fangster, start, slut, timmar, fiskH,
+      liten:sizeCountsDay.Liten, mellan:sizeCountsDay.Mellan, stor:sizeCountsDay.Stor, storstTxt,
+      vattentemp: vattentempRow ? vattentempRow.vattentemp : '–',
+      lufttryck: lufttryckRow ? lufttryckRow.lufttryck : '–',
+      lufttryckstrend: lufttryckstrendRow ? lufttryckstrendRow.lufttryckstrend : '–',
+      vindriktning: vindTxt,
+      fiskare: [...new Set(g.map(r=>r.fiskare))].sort(),
+      platser: [...new Set(g.map(r=>r.plats))].sort(),
+      bastaPlats: [bpDag, Math.round(bpDagPoang)], vanligasteDrag:vDrag, olikaDrag:dragCounts.size, vanligasteArt:vArt,
+    });
+  });
+  dayRows.sort((a,b)=> a.datum < b.datum ? 1 : -1);
+
+  return { total, sizePct, nDated, nDatedDays, totalDatedHours, fiskPerTimme, fiskareRate,
+    platsHours, lufttryckHours, vindriktningHours, lufttryckstrendHours,
+    bestLufttryck, bestVindriktning, bestLufttryckstrend, bestTidfonster,
+    monthCounts, bestMonth, bestMonthN, fiskareCounts, artCountsArr,
+    bestPlats, bestPlatsPoang, records, platsStatsArr, top10Names, heatMap, dayRows };
+}
+
+// ---------- Render helpers ----------
+function nnCard(title, value, sub, note){
+  return `<div class="nn-card">
+    <div class="nn-card-title">${title}</div>
+    <div class="nn-card-value">${value}</div>
+    <div class="nn-card-sub">${sub}</div>
+    ${note ? `<div class="nn-card-note">${note}</div>` : ''}
+  </div>`;
+}
+function nnBarsChart(title, labels, values){
+  const max = Math.max(...values, 1);
+  const bars = labels.map((lab,i)=>`
+    <div class="nn-bar-col">
+      <div class="nn-bar" style="height:${Math.max(values[i]/max*100,1)}%;" title="${lab}: ${values[i]}"></div>
+      <div class="nn-bar-label">${lab}</div>
+    </div>`).join('');
+  return `<div class="nn-chart-card"><div class="nn-card-title">${title}</div><div class="nn-bars">${bars}</div></div>`;
+}
+function nnHBarsChart(title, labels, values){
+  const max = Math.max(...values, 1);
+  const rowsHtml = labels.map((lab,i)=>`
+    <div class="nn-hbar-row">
+      <div class="nn-hbar-label">${lab}</div>
+      <div class="nn-hbar-track"><div class="nn-hbar-fill" style="width:${values[i]/max*100}%;"></div></div>
+      <div class="nn-hbar-value">${values[i]}</div>
+    </div>`).join('');
+  return `<div class="nn-chart-card"><div class="nn-card-title">${title}</div><div class="nn-hbars">${rowsHtml}</div></div>`;
+}
+function nnPolar(cx,cy,r,angleDeg){
+  const rad = (angleDeg-90)*Math.PI/180;
+  return { x: cx+r*Math.cos(rad), y: cy+r*Math.sin(rad) };
+}
+function nnDonutSlicePath(cx,cy,rOuter,rInner,startAngle,endAngle){
+  const so=nnPolar(cx,cy,rOuter,endAngle), eo=nnPolar(cx,cy,rOuter,startAngle);
+  const si=nnPolar(cx,cy,rInner,endAngle), ei=nnPolar(cx,cy,rInner,startAngle);
+  const largeArc = (endAngle-startAngle)<=180 ? 0 : 1;
+  return `M ${so.x} ${so.y} A ${rOuter} ${rOuter} 0 ${largeArc} 0 ${eo.x} ${eo.y} L ${ei.x} ${ei.y} A ${rInner} ${rInner} 0 ${largeArc} 1 ${si.x} ${si.y} Z`;
+}
+function nnDonutChart(title, entries){
+  const totalN = entries.reduce((s,e)=>s+e[1],0) || 1;
+  let angle = 0;
+  const size=150, cx=size/2, cy=size/2, rOuter=size/2-4, rInner=rOuter*0.5;
+  const slices = entries.map(([label,count,color])=>{
+    const sweep = count/totalN*360;
+    const path = nnDonutSlicePath(cx,cy,rOuter,rInner,angle,angle+sweep);
+    angle += sweep;
+    return `<path d="${path}" fill="${color}" stroke="var(--panel)" stroke-width="2"></path>`;
+  }).join('');
+  const legend = entries.map(([label,count,color])=>{
+    const pct = Math.round(count/totalN*100);
+    return `<div class="nn-legend-item"><span class="nn-legend-swatch" style="background:${color};"></span><span class="nn-card-sub" style="margin:0;">${label} ${pct}%</span></div>`;
+  }).join('');
+  return `<div class="nn-chart-card">
+    <div class="nn-card-title">${title}</div>
+    <div class="nn-donut-wrap"><svg viewBox="0 0 ${size} ${size}" width="150" height="150">${slices}</svg></div>
+    <div class="nn-legend">${legend}</div>
+  </div>`;
+}
+function nnTable(title, columns, rowsArr){
+  const thead = columns.map(c=>`<th style="width:${c.width};">${c.label}</th>`).join('');
+  const tbody = rowsArr.map(r=>`<tr>${columns.map(c=>`<td>${r[c.key]}</td>`).join('')}</tr>`).join('');
+  return `<div class="nn-chart-card">
+    <div class="nn-card-title">${title}</div>
+    <div style="margin-top:8px;overflow:hidden;"><table class="nn-table"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>
+  </div>`;
+}
+function nnHeatmap(title, platser, months, matrix){
+  const max = Math.max(...matrix.flat(), 1);
+  const rowsHtml = platser.map((p,ri)=>{
+    const cells = months.map((m,ci)=>{
+      const v = matrix[ri][ci];
+      return `<div class="nn-heat-cell" style="background:${nnHeatColor(v,max)};">${v>0?Math.round(v):''}</div>`;
+    }).join('');
+    return `<div class="nn-heat-row"><div class="nn-heat-plats">${p}</div>${cells}</div>`;
+  }).join('');
+  const monthLabels = `<div class="nn-heat-months"><div class="nn-heat-plats"></div>${months.map(m=>`<div class="nn-heat-month-label">${m}</div>`).join('')}</div>`;
+  return `<div class="nn-chart-card"><div class="nn-card-title">${title}</div><div class="nn-heat-wrap">${rowsHtml}${monthLabels}</div></div>`;
+}
+function nnSessionCard(row){
+  const fiskHTxt = row.fiskH!=null ? row.fiskH.toFixed(1) : '–';
+  const totalN = row.liten+row.mellan+row.stor || 1;
+  const litenPct = Math.round(row.liten/totalN*100), mellanPct = Math.round(row.mellan/totalN*100), storPct = Math.round(row.stor/totalN*100);
+  const d = new Date(row.datum+'T00:00:00');
+  const dateTxt = `${NN_WEEKDAY_SV[(d.getDay()+6)%7]} ${d.getDate()} ${NN_MONTH_ABBR_SV[d.getMonth()]} ${d.getFullYear()}`;
+  return `<div class="nn-session-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <div class="nn-card-title">${dateTxt}</div>
+        <div class="nn-card-value" style="font-size:17px;margin-top:2px;">${row.fangster} fångster</div>
+        <div class="nn-card-sub">${row.liten} liten / ${row.mellan} mellan / ${row.stor} stor (${litenPct}/${mellanPct}/${storPct}%)</div>
+      </div>
+      <div style="text-align:right;flex:none;">
+        <div class="nn-card-value" style="font-size:19px;">${fiskHTxt}</div>
+        <div class="nn-card-sub">fisk/h</div>
+        <div class="nn-card-note" style="margin-top:2px;">${row.timmar.toFixed(1)} h (${nnMinutesToHM(row.start)}–${nnMinutesToHM(row.slut)})</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">
+      <div style="flex:1;min-width:0;"><div class="nn-mini-label">Fångster</div><div class="nn-mini-value">${row.fangster}</div></div>
+      <div style="flex:1;min-width:0;"><div class="nn-mini-label">Störst</div><div class="nn-mini-value">${row.storstTxt}</div></div>
+      <div style="flex:1;min-width:0;"><div class="nn-mini-label">Vattentemp</div><div class="nn-mini-value">${row.vattentemp}</div></div>
+      <div style="flex:1;min-width:0;"><div class="nn-mini-label">Lufttryck</div><div class="nn-mini-value">${row.lufttryck}</div></div>
+    </div>
+    <div class="nn-meta-line">Bästa plats: ${row.bastaPlats[0]} (${row.bastaPlats[1]}p) &middot; Vanligaste art: ${row.vanligasteArt}</div>
+    <div class="nn-meta-line">Vind: ${row.vindriktning} &middot; Trend: ${row.lufttryckstrend}</div>
+    <div class="nn-meta-line">Drag: ${row.vanligasteDrag} (${row.olikaDrag} olika) &middot; Fiskare: ${row.fiskare.join(', ')}</div>
+    <div class="nn-meta-line" style="color:var(--faint);">Platser: ${row.platser.join(', ')}</div>
+  </div>`;
+}
+
+function renderOversiktHTML(stats){
+  const fiskHTxt = stats.nDated ? stats.fiskPerTimme.toFixed(1) : '–';
+  const fisketidCard = stats.nDated
+    ? nnCard('Fisketid totalt & snitt', stats.totalDatedHours.toFixed(1)+' h', (stats.totalDatedHours/stats.nDatedDays).toFixed(1)+' h/dag (snitt)', stats.nDatedDays+' fiskedagar')
+    : nnCard('Fisketid totalt & snitt', '–', '–', 'ingen tid loggad');
+
+  const fiskareCardsHTML = stats.fiskareRate.length
+    ? `<div class="nn-row">${stats.fiskareRate.map(f=>nnCard(f.fiskare.toUpperCase(), f.poangPerH.toFixed(1)+' poäng/h', f.timmar.toFixed(1)+' h fiskat totalt')).join('')}</div>`
+    : `<div class="nn-row">${nnCard('–','–','ingen tid loggad')}</div>`;
+
+  const monthLabels = NN_MONTH_ORDER.map(m=>NN_MONTH_ABBR[m]);
+  const monthValues = NN_MONTH_ORDER.map(m=>stats.monthCounts.get(m)||0);
+  const fiskareNames = [...stats.fiskareCounts.keys()];
+  const fiskareVals = fiskareNames.map(f=>stats.fiskareCounts.get(f));
+
+  const artEntries = stats.artCountsArr.map(([art,count],i)=>[art, count, NN_SPECIES_COLORS[art] || NN_FALLBACK_RAMP[i%NN_FALLBACK_RAMP.length]]);
+
+  const platsRows = stats.platsStatsArr.map(p=>{
+    const h = stats.platsHours.get(p.plats);
+    return { plats:p.plats, poang:p.poang.toFixed(1), fangster:p.fangster, tid:(h && h>=0.05) ? h.toFixed(1)+' h' : '–' };
+  });
+  const monthsAbbrList = NN_MONTH_ORDER.map(m=>NN_MONTH_ABBR[m]);
+  const heatMatrix = stats.top10Names.map(p=> NN_MONTH_ORDER.map(m=> stats.heatMap.get(p+''+m) || 0));
+
+  function weatherSub(poang, hoursMap, key){
+    const h = hoursMap.get(key);
+    return `Viktad poäng: ${poang}${(h && h>=0.05) ? ` · ${h.toFixed(1)} h fiskat` : ''}`;
+  }
+
+  return `
+    <div class="nn-row">
+      ${nnCard('Totalt fångster', stats.total, 'i loggen')}
+      ${nnCard('Fisk / timme', fiskHTxt, stats.nDatedDays+' dagar med klockslag', stats.nDated+' av '+stats.total+' fångster har klockslag')}
+      ${fisketidCard}
+    </div>
+    <div class="nn-row">
+      ${nnCard('Storleksfördelning', `${stats.sizePct.Liten}/${stats.sizePct.Mellan}/${stats.sizePct.Stor}%`, 'Liten / Mellan / Stor')}
+      ${nnCard('Bästa plats', stats.bestPlats, 'Viktad poäng: '+Math.round(stats.bestPlatsPoang))}
+      ${nnCard('Bästa månad', stats.bestMonth, stats.bestMonthN+' fångster')}
+    </div>
+    <div class="nn-label">Bästa fiskare (poäng/h)</div>
+    ${fiskareCardsHTML}
+    ${nnBarsChart('Fångster per månad', monthLabels, monthValues)}
+    ${nnHBarsChart('Fångster per fiskare', fiskareNames, fiskareVals)}
+    ${nnDonutChart('Fångster per art', artEntries)}
+    ${nnTable('Topp fiskar', [
+      {key:'art',label:'Art',width:'20%'},{key:'vikt',label:'Vikt',width:'16%'},
+      {key:'langd',label:'Längd',width:'16%'},{key:'fiskare',label:'Fiskare',width:'24%'},{key:'plats',label:'Plats',width:'24%'}
+    ], stats.records)}
+    ${nnTable('Topp 10 platser (viktad poäng)', [
+      {key:'plats',label:'Plats',width:'40%'},{key:'poang',label:'Poäng',width:'20%'},
+      {key:'fangster',label:'Fångster',width:'20%'},{key:'tid',label:'Tid',width:'20%'}
+    ], platsRows)}
+    ${nnHeatmap('Heatmap: plats × månad (viktad poäng)', stats.top10Names, monthsAbbrList, heatMatrix)}
+    <div class="nn-label">Väder &amp; tid på dygnet — ${stats.nDated} av ${stats.total} fångster har klockslag</div>
+    <div class="nn-row">
+      ${nnCard('Bästa lufttryck', stats.bestLufttryck[0], weatherSub(stats.bestLufttryck[1], stats.lufttryckHours, stats.bestLufttryck[0]))}
+      ${nnCard('Bästa vindriktning', stats.bestVindriktning[0], weatherSub(stats.bestVindriktning[1], stats.vindriktningHours, stats.bestVindriktning[0]))}
+    </div>
+    <div class="nn-row">
+      ${nnCard('Bästa lufttryckstrend', stats.bestLufttryckstrend[0], weatherSub(stats.bestLufttryckstrend[1], stats.lufttryckstrendHours, stats.bestLufttryckstrend[0]))}
+      ${nnCard('Bästa tidsfönster', stats.bestTidfonster[0], 'Viktad poäng: '+stats.bestTidfonster[1], 'fångster, ej h — ett pass kan spänna över flera fönster')}
+    </div>
+  `;
+}
+function renderSessionsloggHTML(stats){
+  const header = `<div class="nn-card-title" style="margin-bottom:10px;">Sessionslogg — ${stats.dayRows.length} fiskedagar &middot; ${stats.nDated} av ${stats.total} fångster har klockslag</div>`;
+  return header + stats.dayRows.map(nnSessionCard).join('');
+}
+
+let nnStatsCache = null;
+function nnSwitchPage(which){
+  document.getElementById('nnPageOversikt').classList.toggle('nn-active', which==='oversikt');
+  document.getElementById('nnPageSession').classList.toggle('nn-active', which==='session');
+  document.getElementById('nnNavOversikt').classList.toggle('nn-active', which==='oversikt');
+  document.getElementById('nnNavSession').classList.toggle('nn-active', which==='session');
+}
+function renderNappNyttBody(){
+  const stats = nnStatsCache;
+  document.getElementById('nnBody').innerHTML = `
+    <div class="nn-nav">
+      <button type="button" id="nnNavOversikt" class="nn-active">Översikt</button>
+      <button type="button" id="nnNavSession">Sessionslogg</button>
+    </div>
+    <div id="nnPageOversikt" class="nn-page nn-active">${renderOversiktHTML(stats)}</div>
+    <div id="nnPageSession" class="nn-page">${renderSessionsloggHTML(stats)}</div>
+  `;
+  document.getElementById('nnNavOversikt').addEventListener('click', ()=>nnSwitchPage('oversikt'));
+  document.getElementById('nnNavSession').addEventListener('click', ()=>nnSwitchPage('session'));
+}
+async function openNappNyttDashboard(){
+  openOverlay(`<h2>NappNytt</h2><div id="nnBody"><div class="nn-loading">Hämtar data …</div></div>`);
+  try{
+    const res = await fetch(config.webAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'getFangstlogg', secret: config.secret || '' })
+    });
+    const data = await res.json();
+    if(!data.success || !Array.isArray(data.rows)) throw new Error(data.error || 'Okänt fel');
+    nnStatsCache = computeDashboardStats(data.rows);
+    renderNappNyttBody();
+  }catch(err){
+    const body = document.getElementById('nnBody');
+    if(!body) return; // overlay was closed before the fetch resolved
+    body.innerHTML = `<div class="nn-error">Kunde inte hämta data.<br>${(err && err.message) || err}<br><br>
+      <button class="btn btn-secondary" id="nnRetry" style="width:100%;">Försök igen</button></div>`;
+    document.getElementById('nnRetry').addEventListener('click', openNappNyttDashboard);
+  }
+}
+document.getElementById('btnNappNytt').addEventListener('click', openNappNyttDashboard);
 
 // A mis-tap here would silently wipe every unexported catch AND pending new
 // plats this session — unlike the design mockup (which fires immediately),
@@ -1699,20 +2218,44 @@ function toPostgresCatch(c){
 }
 
 // fishing.platser stores latitude/longitude as real NUMERIC columns, parsed
-// out of this app's single free-text "Google coordinates" field. Same
-// gotcha documented in CLAUDE.md's recurring gotchas: values use Swedish
-// comma-decimal AND the comma also separates lat from long, so split on
-// ", " (comma+space) — never a bare ",", or every number splits in half.
+// out of this app's single free-text "Google coordinates" field. Handles
+// two real-world formats, found via actual different anglers' phones —
+// this isn't one universal Google Maps format, it varies by device/OS:
+//   A) Swedish comma-decimal, comma+space as the lat/long separator —
+//      "58,8704299, 17,5717571" (what Kecke's Android phone gives, historic
+//      format, still fully supported. Also transparently handles plain
+//      period-decimals WITH a space, "58.8704299, 17.5717571", since
+//      replacing a comma that isn't there is a no-op).
+//   B) Plain period-decimal, comma separator, NO space — "58.890335,
+//      17.542935" (found 2026-09-01: what Björn's iPhone actually gives
+//      copying a dropped Google Maps pin — Format A's split on ", " can't
+//      find a match at all here, so this needs its own fallback).
+// Only ONE comma in Format A is followed by a space (the separator) — every
+// decimal comma isn't — which is what makes splitting on the literal ", "
+// substring unambiguous for that format.
 function parseCoordinates(raw){
   if(!raw) return { latitude: null, longitude: null };
-  const parts = raw.split(', ');
-  if(parts.length !== 2) return { latitude: null, longitude: null };
-  const lat = parseFloat(parts[0].replace(',', '.'));
-  const lng = parseFloat(parts[1].replace(',', '.'));
-  return {
-    latitude: Number.isNaN(lat) ? null : lat,
-    longitude: Number.isNaN(lng) ? null : lng
-  };
+  const trimmed = raw.trim();
+
+  const spaceParts = trimmed.split(', ');
+  if(spaceParts.length === 2){
+    const lat = parseFloat(spaceParts[0].replace(',', '.'));
+    const lng = parseFloat(spaceParts[1].replace(',', '.'));
+    if(!Number.isNaN(lat) && !Number.isNaN(lng)){
+      return { latitude: lat, longitude: lng };
+    }
+  }
+
+  const commaParts = trimmed.split(',');
+  if(commaParts.length === 2){
+    const lat = parseFloat(commaParts[0].trim());
+    const lng = parseFloat(commaParts[1].trim());
+    if(!Number.isNaN(lat) && !Number.isNaN(lng)){
+      return { latitude: lat, longitude: lng };
+    }
+  }
+
+  return { latitude: null, longitude: null };
 }
 
 function toPostgresPlats(p){
