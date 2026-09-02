@@ -1577,18 +1577,6 @@ function nnMinutesToHM(mins){
   const h = Math.floor(mins/60), m = Math.round(mins%60);
   return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
 }
-function nnGroupBy(arr, keyFn){
-  const m = new Map();
-  arr.forEach(x=>{ const k=keyFn(x); if(!m.has(k)) m.set(k,[]); m.get(k).push(x); });
-  return m;
-}
-function nnBestBy(arr, field){
-  const m = new Map();
-  arr.forEach(r=>{ m.set(r[field], (m.get(r[field])||0) + r.poang); });
-  let best=null, bestVal=-Infinity;
-  m.forEach((v,k)=>{ if(v>bestVal){bestVal=v;best=k;} });
-  return best!=null ? [best, Math.round(bestVal)] : ['–', 0];
-}
 function nnRgbToHex(rgb){
   return '#'+rgb.map(c=>Math.max(0,Math.min(255,Math.round(c))).toString(16).padStart(2,'0')).join('');
 }
@@ -1598,188 +1586,168 @@ function nnHeatColor(v, max){
   return nnRgbToHex(NN_HEAT_LOW.map((lo,i)=> lo + (NN_HEAT_HIGH[i]-lo)*t));
 }
 
-// Mirrors the Python prototype's stats computation 1:1 — see
-// dashboard_app.py (scratchpad, 2026-09-02) for the original with full
-// rationale comments on every rule (same-boat hours, >=0.5h rate
-// exclusion, honest "–" thresholds, etc.).
-function computeDashboardStats(allRows){
-  const rows = allRows.filter(r=>r.art);
-  rows.forEach(r=>{ r.poang = NN_SIZE_POINTS[r.storlek] || 0; });
+// Reads from Homelab's PostgREST views now (2026-09-02), not raw catch
+// rows — fisketurslogg/stats_by_fiskare_timme already compute the
+// "same boat, one day, >=0.5h rate exclusion" session logic server-side
+// (verified byte-for-byte identical to this file's own earlier client-
+// side numbers before the switch: Björn 212 poäng/30.30h/7.00 poäng/h,
+// Kecke 146/25.05/5.83, Tobbe 49/15.52/3.16). This function's job is now
+// just reshaping each view's rows into the exact object shape the render
+// functions below already expect — no session/hours logic re-derived
+// here, on purpose, so the two dashboards (this and Homelab's own
+// Streamlit one) can never quietly drift apart on what counts as a
+// session.
+function computeDashboardStats(views){
+  const { turslogg, fiskareTimme, art, month, plats, platsManad, fiskare, tidfonster } = views;
 
-  const total = rows.length;
-  const sizeCounts = {Liten:0,Mellan:0,Stor:0};
-  rows.forEach(r=>{ if(sizeCounts[r.storlek]!=null) sizeCounts[r.storlek]++; });
+  // ---- totals / size distribution — from stats_by_art (art rows are
+  // always present regardless of a blank fiskare/plats, unlike grouping
+  // by fiskare directly) ----
+  const total = art.reduce((s,a)=>s+a.antal_fangster,0);
+  const litenN = art.reduce((s,a)=>s+a.antal_liten,0);
+  const mellanN = art.reduce((s,a)=>s+a.antal_mellan,0);
+  const storN = art.reduce((s,a)=>s+a.antal_stor,0);
   const sizePct = {
-    Liten: total ? Math.round(sizeCounts.Liten/total*100) : 0,
-    Mellan: total ? Math.round(sizeCounts.Mellan/total*100) : 0,
-    Stor: total ? Math.round(sizeCounts.Stor/total*100) : 0,
+    Liten: total ? Math.round(litenN/total*100) : 0,
+    Mellan: total ? Math.round(mellanN/total*100) : 0,
+    Stor: total ? Math.round(storN/total*100) : 0,
   };
 
-  const dated = rows.filter(r=>r.tid && r.datum);
-  const nDated = dated.length;
-  const byDatum = nnGroupBy(dated, r=>r.datum);
+  // ---- day-level: fisketurslogg IS the canonical day/session model now
+  // -- fisk_per_timme already NULLs itself below 0.5h server-side, so no
+  // client-side exclusion filter needed for it specifically; totals
+  // (fangster/timmar) are never gated, matching the "totals stay honest,
+  // only the rate gets excluded" rule this was all built around. ----
+  const nDatedDays = turslogg.length;
+  const nDated = turslogg.reduce((s,d)=>s+d.fangster,0);
+  const totalDatedHours = turslogg.reduce((s,d)=>s+d.timmar,0);
+  const qualDays = turslogg.filter(d=>d.fisk_per_timme!=null);
+  const fiskPerTimme = qualDays.length
+    ? qualDays.reduce((s,d)=>s+d.fangster,0) / qualDays.reduce((s,d)=>s+d.timmar,0)
+    : 0;
 
-  // Day-level (Fisketurslogg's own grain — one row per calendar day,
-  // Start/Slut across EVERYONE's catches that day combined): totals,
-  // avg session, and fisk/timme all come from here only.
-  const daySessions = [];
-  byDatum.forEach((g, datum)=>{
-    const times = g.map(r=>nnTimeToMinutes(r.tid));
-    const start = Math.min(...times), slut = Math.max(...times);
-    daySessions.push({ datum, fangster:g.length, poang:g.reduce((s,r)=>s+r.poang,0), timmar:(slut-start)/60 });
-  });
-  const totalDatedHours = daySessions.reduce((s,d)=>s+d.timmar,0);
-  const nDatedDays = daySessions.length;
-  const qualDays = daySessions.filter(d=>d.timmar>=0.5);
-  const qualFangster = qualDays.reduce((s,d)=>s+d.fangster,0);
-  const qualTimmar = qualDays.reduce((s,d)=>s+d.timmar,0);
-  const fiskPerTimme = qualTimmar ? qualFangster/qualTimmar : 0;
+  // ---- per-fiskare poang/h -- directly from stats_by_fiskare_timme,
+  // which already credits each fiskare the full shared day's hours. ----
+  const fiskareRate = fiskareTimme
+    .map(f=>({ fiskare: f.fiskare, poang: f.poang, timmar: f.timmar, poangPerH: f.poang_per_h }))
+    .sort((a,b)=>b.poangPerH-a.poangPerH);
 
-  // Per-fiskare poäng/h: each fiskare active on a day is credited that
-  // SAME shared day-level Timmar (same boat), with their own poäng.
-  const dayTimmar = new Map(daySessions.map(d=>[d.datum, d.timmar]));
-  const fiskareDayMap = nnGroupBy(dated, r=>r.fiskare+''+r.datum);
-  const fiskareDay = [];
-  fiskareDayMap.forEach((g)=>{
-    fiskareDay.push({ fiskare:g[0].fiskare, poang:g.reduce((s,r)=>s+r.poang,0), timmar:dayTimmar.get(g[0].datum) });
-  });
-  const qualFd = fiskareDay.filter(d=>d.timmar>=0.5);
-  const fiskareAggMap = nnGroupBy(qualFd, d=>d.fiskare);
-  const fiskareRate = [];
-  fiskareAggMap.forEach((g, fiskare)=>{
-    const poang = g.reduce((s,d)=>s+d.poang,0), timmar = g.reduce((s,d)=>s+d.timmar,0);
-    fiskareRate.push({ fiskare, poang, timmar, poangPerH: poang/timmar });
-  });
-  fiskareRate.sort((a,b)=>b.poangPerH-a.poangPerH);
+  // ---- basta plats / basta manad ----
+  let bestPlats='–', bestPlatsPoang=0;
+  plats.forEach(p=>{ if(p.plats_id!=='Ospecificerad' && p.viktad_poang>bestPlatsPoang){ bestPlatsPoang=p.viktad_poang; bestPlats=p.plats_id; } });
+  let bestMonth='–', bestMonthN=0;
+  month.forEach(m=>{ if(m.antal_fangster>bestMonthN){ bestMonthN=m.antal_fangster; bestMonth=m.manad; } });
 
-  // Plats/condition hours: grouped by (datum, plats, conditions) — no
-  // fiskare — so a place several anglers shared one day counts once.
-  const placeMap = nnGroupBy(dated, r=>[r.datum,r.plats,r.lufttryck,r.vindriktning,r.lufttryckstrend].join(''));
-  const placeSessions = [];
-  placeMap.forEach((g)=>{
-    const times = g.map(r=>nnTimeToMinutes(r.tid));
-    placeSessions.push({ plats:g[0].plats, lufttryck:g[0].lufttryck, vindriktning:g[0].vindriktning,
-      lufttryckstrend:g[0].lufttryckstrend, timmar:(Math.max(...times)-Math.min(...times))/60 });
-  });
-  function hoursBy(field){
+  // ---- vader-block: basta lufttryck/vindriktning/lufttryckstrend by
+  // total poang, plus hours-fished under that condition -- computed from
+  // fisketurslogg's own day rows. Day poang = liten*1+mellan*3+stor*8,
+  // the shared weighting constant (confirmed identical server- and
+  // client-side) applied to counts the view already computed -- not a
+  // re-derivation of the day/session grouping itself. vindriktning isn't
+  // always day-constant in the real data; the view resolves it to that
+  // day's modal value, so a mixed day's poang here all counts toward the
+  // majority reading -- same collapsing the Sessionslogg cards already do
+  // for "Vind: X (aven: Y)".
+  function bestByDay(field){
     const m = new Map();
-    placeSessions.forEach(p=>{ m.set(p[field], (m.get(p[field])||0)+p.timmar); });
+    turslogg.forEach(d=>{
+      const key = d[field];
+      if(!key) return;
+      const poang = d.liten*NN_SIZE_POINTS.Liten + d.mellan*NN_SIZE_POINTS.Mellan + d.stor*NN_SIZE_POINTS.Stor;
+      m.set(key, (m.get(key)||0) + poang);
+    });
+    let best='–', bestVal=-Infinity;
+    m.forEach((v,k)=>{ if(v>bestVal){ bestVal=v; best=k; } });
+    return best!=='–' ? [best, Math.round(bestVal)] : ['–', 0];
+  }
+  function hoursByDay(field){
+    const m = new Map();
+    turslogg.forEach(d=>{ const key=d[field]; if(!key) return; m.set(key,(m.get(key)||0)+d.timmar); });
     return m;
   }
-  const platsHours = hoursBy('plats'), lufttryckHours = hoursBy('lufttryck');
-  const vindriktningHours = hoursBy('vindriktning'), lufttryckstrendHours = hoursBy('lufttryckstrend');
+  const bestLufttryck = bestByDay('lufttryck');
+  const bestVindriktning = bestByDay('vindriktning');
+  const bestLufttryckstrend = bestByDay('lufttryckstrend');
+  const lufttryckHours = hoursByDay('lufttryck');
+  const vindriktningHours = hoursByDay('vindriktning');
+  const lufttryckstrendHours = hoursByDay('lufttryckstrend');
 
-  const bestLufttryck = nnBestBy(dated, 'lufttryck');
-  const bestVindriktning = nnBestBy(dated, 'vindriktning');
-  const bestLufttryckstrend = nnBestBy(dated, 'lufttryckstrend');
-  dated.forEach(r=>{
-    const h = Number(String(r.tid).split(':')[0]);
-    r.tidfonster = (h>=5&&h<9) ? 'Morgon (05-09)' : (h>=9&&h<12) ? 'Förmiddag (09-12)' :
-      (h>=12&&h<17) ? 'Eftermiddag (12-17)' : (h>=17&&h<21) ? 'Kväll (17-21)' : 'Natt (21-05)';
-  });
-  const bestTidfonster = nnBestBy(dated, 'tidfonster');
+  // basta tidsfonster -- genuinely catch-level, from its own dedicated view.
+  let bestTidfonster = ['–', 0];
+  tidfonster.forEach(t=>{ if(t.viktad_poang>bestTidfonster[1]) bestTidfonster=[t.tidfonster, t.viktad_poang]; });
 
-  // .filter(r=>r.X) guards below match pandas' Series.value_counts()
-  // default (dropna=True) — the Python prototype never showed a blank/
-  // null bar for the handful of historic rows missing Fiskare or Månad;
-  // a plain JS Map.set(undefined, ...) doesn't drop that the same way,
-  // which is exactly what put a stray "null" bar into Fångster per
-  // fiskare here until this was caught during testing.
+  // ---- charts: manad / fiskare / art, straight from their views ----
   const monthCounts = new Map();
-  rows.filter(r=>r.manad).forEach(r=>{ monthCounts.set(r.manad, (monthCounts.get(r.manad)||0)+1); });
-  let bestMonth='–', bestMonthN=0;
-  monthCounts.forEach((v,k)=>{ if(v>bestMonthN){bestMonthN=v;bestMonth=k;} });
+  month.forEach(m=>{ if(m.antal_fangster>0) monthCounts.set(m.manad, m.antal_fangster); });
 
   const fiskareCounts = new Map();
-  rows.filter(r=>r.fiskare).forEach(r=>{ fiskareCounts.set(r.fiskare, (fiskareCounts.get(r.fiskare)||0)+1); });
+  fiskare.forEach(f=>{ if(f.fiskare && f.antal_fangster>0) fiskareCounts.set(f.fiskare, f.antal_fangster); });
 
-  const artCountsMap = new Map();
-  rows.forEach(r=>{ artCountsMap.set(r.art, (artCountsMap.get(r.art)||0)+1); });
-  const artCountsArr = [...artCountsMap.entries()].sort((a,b)=>b[1]-a[1]);
+  const artCountsArr = art.filter(a=>a.antal_fangster>0)
+    .map(a=>[a.art, a.antal_fangster]).sort((a,b)=>b[1]-a[1]);
 
-  const platsPoangAll = new Map();
-  rows.forEach(r=>{ if(r.plats && r.plats!=='Ospecificerad') platsPoangAll.set(r.plats, (platsPoangAll.get(r.plats)||0)+r.poang); });
-  let bestPlats='–', bestPlatsPoang=0;
-  platsPoangAll.forEach((v,k)=>{ if(v>bestPlatsPoang){bestPlatsPoang=v;bestPlats=k;} });
+  // ---- topp fiskar -- stats_by_art's own rekord_* fields replace the
+  // client-side per-species max-vikt scan this used to be. ----
+  const records = art.filter(a=>a.antal_fangster>0).map(a=>({
+    art: a.art,
+    vikt: a.rekord_vikt_g!=null ? Math.round(a.rekord_vikt_g) : '–',
+    langd: a.rekord_langd_cm!=null ? Math.round(a.rekord_langd_cm) : '–',
+    fiskare: a.rekord_fiskare || '–',
+    plats: a.rekord_plats || '–',
+  })).sort((a,b)=>a.art.localeCompare(b.art,'sv'));
 
-  const records = [];
-  nnGroupBy(rows, r=>r.art).forEach((g, art)=>{
-    const withVikt = g.filter(r=>r.vikt!=null && r.vikt!=='');
-    if(withVikt.length){
-      const top = withVikt.reduce((a,b)=>Number(b.vikt)>Number(a.vikt)?b:a);
-      records.push({ art, vikt:Math.round(Number(top.vikt)), langd:(top.langd!=null&&top.langd!=='')?Math.round(Number(top.langd)):'–', fiskare:top.fiskare, plats:top.plats });
-    } else {
-      records.push({ art, vikt:'–', langd:'–', fiskare:'–', plats:'–' });
-    }
-  });
-  records.sort((a,b)=>a.art.localeCompare(b.art,'sv'));
+  // ---- topp 10 platser + heatmap. platsHours now comes from stats_
+  // by_plats's own timmar_fiskat -- its deliberately different-from-
+  // fisketurslogg per-place hours concept (per-place-within-a-day span,
+  // "how productive is this place", not "how long was the trip"),
+  // adopted as-is rather than reconciled into one number, per Homelab. ----
+  const platsHours = new Map();
+  plats.forEach(p=>{ if(p.timmar_fiskat!=null) platsHours.set(p.plats_id, p.timmar_fiskat); });
 
-  const platsStatsMap = new Map();
-  rows.forEach(r=>{
-    if(!r.plats || r.plats==='Ospecificerad') return;
-    if(!platsStatsMap.has(r.plats)) platsStatsMap.set(r.plats, {poang:0,fangster:0});
-    const s = platsStatsMap.get(r.plats); s.poang+=r.poang; s.fangster+=1;
-  });
-  const platsStatsArr = [...platsStatsMap.entries()].map(([plats,s])=>({plats,poang:s.poang,fangster:s.fangster}))
-    .sort((a,b)=>b.poang-a.poang).slice(0,10);
+  const platsStatsArr = plats
+    .filter(p=>p.plats_id!=='Ospecificerad' && p.antal_fangster>0)
+    .sort((a,b)=>b.viktad_poang-a.viktad_poang).slice(0,10)
+    .map(p=>({ plats: p.plats_id, poang: p.viktad_poang, fangster: p.antal_fangster }));
   const top10Names = platsStatsArr.map(p=>p.plats);
 
   const heatMap = new Map();
-  rows.forEach(r=>{
-    if(!top10Names.includes(r.plats)) return;
-    const k = r.plats+''+r.manad;
-    heatMap.set(k, (heatMap.get(k)||0)+r.poang);
+  platsManad.forEach(pm=>{
+    if(!top10Names.includes(pm.plats_id)) return;
+    heatMap.set(pm.plats_id+''+pm.manad, pm.viktad_poang);
   });
 
-  const dayRows = [];
-  byDatum.forEach((g, datum)=>{
-    const times = g.map(r=>nnTimeToMinutes(r.tid));
-    const start = Math.min(...times), slut = Math.max(...times);
-    const timmar = (slut-start)/60, fangster = g.length;
-    const fiskH = timmar>=0.5 ? fangster/timmar : null;
-    const sizeCountsDay = {Liten:0,Mellan:0,Stor:0};
-    g.forEach(r=>{ if(sizeCountsDay[r.storlek]!=null) sizeCountsDay[r.storlek]++; });
-    const withVikt = g.filter(r=>r.vikt!=null && r.vikt!=='');
+  // ---- sessionslogg -- fisketurslogg rows map ~1:1 onto the card shape;
+  // the *_alla arrays give the "aven: ..." honesty note the same way the
+  // old client-side version did, just server-computed now. Note array
+  // order isn't frequency-ordered (Homelab's own caveat) -- the modal
+  // field is already the resolved value, so this filters it out of its
+  // own _alla array rather than assuming array position means anything. ----
+  function withAven(main, alla){
+    if(!main) return '–';
+    const others = (alla||[]).filter(v=>v!==main);
+    return main + (others.length ? ` (även: ${others.join(', ')})` : '');
+  }
+  const dayRows = turslogg.map(d=>{
     let storstTxt = '–';
-    if(withVikt.length){
-      const top = withVikt.reduce((a,b)=>Number(b.vikt)>Number(a.vikt)?b:a);
-      storstTxt = Math.round(Number(top.vikt))+' g';
-      if(top.langd!=null && top.langd!=='') storstTxt += ' / '+Math.round(Number(top.langd))+' cm';
+    if(d.storsta_vikt_g!=null){
+      storstTxt = Math.round(d.storsta_vikt_g)+' g';
+      if(d.langsta_langd_cm!=null) storstTxt += ' / '+Math.round(d.langsta_langd_cm)+' cm';
     }
-    const platsPoangDay = new Map();
-    g.forEach(r=>{ if(r.plats!=='Ospecificerad') platsPoangDay.set(r.plats, (platsPoangDay.get(r.plats)||0)+r.poang); });
-    let bpDag='–', bpDagPoang=0;
-    platsPoangDay.forEach((v,k)=>{ if(v>bpDagPoang){bpDagPoang=v;bpDag=k;} });
-    const dragCounts = new Map();
-    g.forEach(r=>{ if(r.drag) dragCounts.set(r.drag, (dragCounts.get(r.drag)||0)+1); });
-    let vDrag='–', vDragN=0;
-    dragCounts.forEach((v,k)=>{ if(v>vDragN){vDragN=v;vDrag=k;} });
-    const artCountsDay = new Map();
-    g.forEach(r=>{ artCountsDay.set(r.art, (artCountsDay.get(r.art)||0)+1); });
-    let vArt='–', vArtN=0;
-    artCountsDay.forEach((v,k)=>{ if(v>vArtN){vArtN=v;vArt=k;} });
-    const vindCounts = new Map();
-    g.forEach(r=>{ if(r.vindriktning) vindCounts.set(r.vindriktning, (vindCounts.get(r.vindriktning)||0)+1); });
-    let vindMain='–', vindMainN=0;
-    vindCounts.forEach((v,k)=>{ if(v>vindMainN){vindMainN=v;vindMain=k;} });
-    const vindOthers = [...vindCounts.keys()].filter(v=>v!==vindMain);
-    const vindTxt = vindMain + (vindOthers.length ? ` (även: ${vindOthers.join(', ')})` : '');
-    const vattentempRow = g.find(r=>r.vattentemp);
-    const lufttryckRow = g.find(r=>r.lufttryck);
-    const lufttryckstrendRow = g.find(r=>r.lufttryckstrend);
-    dayRows.push({
-      datum, fangster, start, slut, timmar, fiskH,
-      liten:sizeCountsDay.Liten, mellan:sizeCountsDay.Mellan, stor:sizeCountsDay.Stor, storstTxt,
-      vattentemp: vattentempRow ? vattentempRow.vattentemp : '–',
-      lufttryck: lufttryckRow ? lufttryckRow.lufttryck : '–',
-      lufttryckstrend: lufttryckstrendRow ? lufttryckstrendRow.lufttryckstrend : '–',
-      vindriktning: vindTxt,
-      fiskare: [...new Set(g.map(r=>r.fiskare))].sort(),
-      platser: [...new Set(g.map(r=>r.plats))].sort(),
-      bastaPlats: [bpDag, Math.round(bpDagPoang)], vanligasteDrag:vDrag, olikaDrag:dragCounts.size, vanligasteArt:vArt,
-    });
-  });
-  dayRows.sort((a,b)=> a.datum < b.datum ? 1 : -1);
+    return {
+      datum: d.datum, fangster: d.fangster,
+      start: nnTimeToMinutes(d.start), slut: nnTimeToMinutes(d.slut), timmar: d.timmar,
+      fiskH: d.fisk_per_timme,
+      liten: d.liten, mellan: d.mellan, stor: d.stor, storstTxt,
+      vattentemp: d.vattentemp || '–',
+      lufttryck: d.lufttryck || '–',
+      lufttryckstrend: withAven(d.lufttryckstrend, d.lufttryckstrend_alla),
+      vindriktning: withAven(d.vindriktning, d.vindriktning_alla),
+      fiskare: (d.fiskare_alla || []).slice().sort(),
+      platser: (d.platser_alla || []).slice().sort(),
+      bastaPlats: [d.basta_plats, d.basta_plats_poang], vanligasteDrag: d.vanligaste_drag,
+      olikaDrag: d.olika_drag, vanligasteArt: d.vanligaste_art,
+    };
+  }).sort((a,b)=> a.datum < b.datum ? 1 : -1);
 
   return { total, sizePct, nDated, nDatedDays, totalDatedHours, fiskPerTimme, fiskareRate,
     platsHours, lufttryckHours, vindriktningHours, lufttryckstrendHours,
@@ -1988,17 +1956,44 @@ function renderNappNyttBody(){
   document.getElementById('nnNavOversikt').addEventListener('click', ()=>nnSwitchPage('oversikt'));
   document.getElementById('nnNavSession').addEventListener('click', ()=>nnSwitchPage('session'));
 }
+// Reads straight from PostgREST now (2026-09-02), not Code.gs's Sheet
+// dump — every stat below comes from a Homelab view (fisketurslogg,
+// stats_by_fiskare_timme, stats_by_art/plats/plats_manad/month/fiskare/
+// tidfonster), computed server-side once and shared with their own
+// Streamlit dashboard too, instead of two independently-hand-derived
+// copies of the same session/hours logic ever quietly drifting apart.
+// Single static reader token, same "accepted risk posture" as the write
+// token already embedded here — deliberate call (2026-09-02, Kecke's):
+// per-device tokens solve a misattribution problem writes have and reads
+// don't (everyone sees the same shared data), and the exact same catch
+// history was already exposed with zero auth via the old getFangstlogg
+// action, so this isn't a new exposure, just a different gate on an
+// already-accepted one. Non-expiring, no rotation/re-upload upkeep.
+const PG_READER_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiZmlzaGluZ19zYW5kYm94X3JlYWRlciJ9.jGeO8RcbHRi5f5KHZPHW-lKnIYsLuj-A-3Ek-2JQAU4';
+const PG_READ_PROFILE = 'fishing_sandbox';
+
+async function nnFetchViews(){
+  const headers = { 'Authorization': 'Bearer ' + PG_READER_TOKEN, 'Accept-Profile': PG_READ_PROFILE };
+  const endpoints = {
+    turslogg: '/fisketurslogg', fiskareTimme: '/stats_by_fiskare_timme', art: '/stats_by_art',
+    month: '/stats_by_month', plats: '/stats_by_plats', platsManad: '/stats_by_plats_manad',
+    fiskare: '/stats_by_fiskare', tidfonster: '/stats_by_tidfonster',
+  };
+  const keys = Object.keys(endpoints);
+  const responses = await Promise.all(keys.map(k => fetch(PG_BASE_URL + endpoints[k], { headers })));
+  const results = {};
+  for(let i = 0; i < keys.length; i++){
+    if(!responses[i].ok) throw new Error(`${endpoints[keys[i]]} → HTTP ${responses[i].status}`);
+    results[keys[i]] = await responses[i].json();
+  }
+  return results;
+}
+
 async function openNappNyttDashboard(){
   openOverlay(`<h2>NappNytt</h2><div id="nnBody"><div class="nn-loading">Hämtar data …</div></div>`);
   try{
-    const res = await fetch(config.webAppUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'getFangstlogg', secret: config.secret || '' })
-    });
-    const data = await res.json();
-    if(!data.success || !Array.isArray(data.rows)) throw new Error(data.error || 'Okänt fel');
-    nnStatsCache = computeDashboardStats(data.rows);
+    const views = await nnFetchViews();
+    nnStatsCache = computeDashboardStats(views);
     renderNappNyttBody();
   }catch(err){
     const body = document.getElementById('nnBody');
