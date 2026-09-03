@@ -555,6 +555,8 @@ const DEFAULT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxv1phCdPQ6
 const STORAGE_KEY = 'pelagio_pending_catches_v1_sandbox';
 const PLATSER_STORAGE_KEY = 'pelagio_pending_platser_v1_sandbox';
 const PLATS_CACHE_KEY = 'pelagio_plats_cache_v1_sandbox';
+const DRAG_STORAGE_KEY = 'pelagio_pending_drag_v1_sandbox';
+const DRAG_CACHE_KEY = 'pelagio_drag_cache_v1_sandbox';
 const SESSION_KEY = 'pelagio_session_v1_sandbox';
 const CONFIG_KEY = 'pelagio_config_v1_sandbox';
 
@@ -708,6 +710,11 @@ let pendingPlatser = JSON.parse(localStorage.getItem(PLATSER_STORAGE_KEY) || '[]
 // mutable variable (not a const) so a live fetch — or adding a plats via the
 // "Lägg till ny plats" form — can update it in place for the current session.
 let effectivePlatsList = JSON.parse(localStorage.getItem(PLATS_CACHE_KEY) || 'null') || PLATS_LIST;
+// New drag/teknik proposed from the app (2026-09-03) — same offline-first
+// queue as pendingPlatser, and effectiveDragList mirrors effectivePlatsList
+// exactly (live-fetched cache, falls back to the static DRAG_LIST).
+let pendingDrag = JSON.parse(localStorage.getItem(DRAG_STORAGE_KEY) || '[]');
+let effectiveDragList = JSON.parse(localStorage.getItem(DRAG_CACHE_KEY) || 'null') || DRAG_LIST;
 // Merge onto defaultSession() (not ||) so a session saved before a new field existed
 // (e.g. vindriktning added later) gets backfilled instead of logging catches with it missing.
 let session = Object.assign(defaultSession(), JSON.parse(localStorage.getItem(SESSION_KEY) || 'null') || {});
@@ -752,7 +759,7 @@ function defaultSession(){
     lufttryck: LUFTTRYCK_LIST[0], // 'Ospecificerad'
     lufttryckstrend: LUFTTRYCKSTREND_LIST[0], // 'Ospecificerat'
     plats: effectivePlatsList[0], // 'Ospecificerad' as long as it stays first in the Platser sheet
-    drag: DRAG_LIST[0]
+    drag: effectiveDragList[0]
   };
 }
 
@@ -776,6 +783,7 @@ function currentTime(){
 function saveAll(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(catchLog));
   localStorage.setItem(PLATSER_STORAGE_KEY, JSON.stringify(pendingPlatser));
+  localStorage.setItem(DRAG_STORAGE_KEY, JSON.stringify(pendingDrag));
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
@@ -802,7 +810,7 @@ function countFor(art, storlek){
 // (live fetch, or adding a spot via "Lägg till ny plats").
 const SESSION_FIELDS_LEFT = [
   { key: 'plats', label: 'Plats' },
-  { key: 'drag',  label: 'Drag',  list: DRAG_LIST }
+  { key: 'drag',  label: 'Drag/Teknik' }
 ];
 // Vindriktning/Lufttryck/Lufttryckstrend removed from here 2026-08-31 — no
 // longer manual picks. They're now auto-stamped from a live SMHI reading
@@ -817,7 +825,7 @@ const SESSION_FIELDS_RIGHT = [
 
 function selectChipsHTML(fields){
   return fields.map(f => {
-    const list = f.key === 'plats' ? effectivePlatsList : f.list;
+    const list = f.key === 'plats' ? effectivePlatsList : f.key === 'drag' ? effectiveDragList : f.list;
     return `
     <div class="chip chip-select">
       <b>${f.label}</b>
@@ -1014,7 +1022,7 @@ function renderGrid(){
       grid.appendChild(row);
     });
   });
-  document.getElementById('btnExport').disabled = (catchLog.length === 0 && pendingPlatser.length === 0);
+  document.getElementById('btnExport').disabled = (catchLog.length === 0 && pendingPlatser.length === 0 && pendingDrag.length === 0);
 }
 
 document.getElementById('grid').addEventListener('click', (e)=>{
@@ -1196,6 +1204,15 @@ function openSettings(){
         : 'Läggs till i Platser-fliken vid nästa export, och blir direkt valbar i Plats-listan här på din telefon. Övriga i gruppen får den automatiskt nästa gång deras app har nätverk.'}
     </p>
 
+    <button class="btn btn-secondary" id="btnNewDrag" style="width:100%; margin-bottom:6px;">
+      🎣 Lägg till ny drag/teknik
+    </button>
+    <p style="color:var(--muted);font-size:11.5px;margin:0 0 16px;">
+      ${pendingDrag.length
+        ? `${pendingDrag.length} drag/teknik väntar på export. Redan valbar i Drag/Teknik-listan här på din telefon — övriga får den nästa gång deras app synkar med nätverk.`
+        : 'Läggs till i Index & Listor vid nästa export, och blir direkt valbar i Drag/Teknik-listan här på din telefon. Övriga i gruppen får den automatiskt nästa gång deras app har nätverk.'}
+    </p>
+
     <hr style="border-color:var(--border);margin:0 0 16px;">
 
     <h2>Export-inställningar — ⚠️ SANDBOX</h2>
@@ -1223,6 +1240,7 @@ function openSettings(){
     </button>
   `);
   document.getElementById('btnNewPlats').addEventListener('click', openNewPlatsForm);
+  document.getElementById('btnNewDrag').addEventListener('click', openNewDragForm);
   document.getElementById('btnClearCache').addEventListener('click', confirmClearAppCache);
 
   if(showEditButton){
@@ -1526,6 +1544,97 @@ async function broadcastPlatsNow(entry){
   await postgresWrite('/platser', [toPostgresPlats(entry)]);
 }
 
+// New-drag/teknik proposal form (2026-09-03) — same "same function as Lägg
+// till ny plats" mechanism (form → are-you-sure → instantly selectable on
+// this device → immediate best-effort broadcast + safety-net resend at
+// next Exportera), deliberately much simpler than the plats form: a
+// technique has just a name, none of plats's coordinates/zon/djup/etc.
+function openNewDragForm(prefill){
+  prefill = prefill || {};
+  openOverlay(`
+    <h2>Ny drag/teknik</h2>
+    <p style="color:var(--muted);font-size:12.5px;margin-top:-8px;">
+      Sparas på telefonen och skickas till Index &amp; Listor vid nästa export.
+    </p>
+    <div class="field">
+      <label>Namn *</label>
+      <input type="text" id="ndNamn" placeholder="t.ex. Wacky-rig" value="${prefill.namn||''}">
+    </div>
+    <div id="ndError" style="color:var(--bad); font-size:12.5px; margin:-8px 0 12px; display:none;"></div>
+    <div class="row-actions">
+      <button class="btn btn-secondary" id="ndBack">Avbryt</button>
+      <button class="btn btn-primary" id="ndSave">Spara drag/teknik</button>
+    </div>
+  `);
+  document.getElementById('ndBack').addEventListener('click', closeOverlay);
+  document.getElementById('ndSave').addEventListener('click', ()=>{
+    const namn = document.getElementById('ndNamn').value.trim();
+    const errorEl = document.getElementById('ndError');
+    if(!namn){
+      errorEl.textContent = 'Namn krävs.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    errorEl.style.display = 'none';
+    confirmSaveNewDrag({ namn });
+  });
+}
+
+// "Are you sure" step, same reasoning as confirmSaveNewPlats — a mis-typed
+// name here goes out to everyone's Drag/Teknik dropdown and into the Sheet.
+function confirmSaveNewDrag(fields){
+  openOverlay(`
+    <h2>Spara ny drag/teknik?</h2>
+    <p style="color:var(--muted);font-size:13.5px;margin-top:-8px;">
+      Lägger till <b style="color:var(--text)">${fields.namn}</b> i Drag/Teknik-listan —
+      valbar direkt på din telefon, och skickas till Sheetet${identityLocked() ? ' + Postgres' : ''}
+      direkt (annars vid nästa export om du är offline just nu).
+    </p>
+    <div class="row-actions">
+      <button class="btn btn-secondary" id="ndCancelConfirm">Avbryt</button>
+      <button class="btn btn-primary" id="ndConfirmSave">Ja, spara</button>
+    </div>
+  `);
+  document.getElementById('ndCancelConfirm').addEventListener('click', ()=> openNewDragForm(fields));
+  document.getElementById('ndConfirmSave').addEventListener('click', ()=>{
+    const entry = {
+      id: Date.now()+'-'+Math.random().toString(36).slice(2,7),
+      namn: fields.namn,
+      ts: new Date().toISOString()
+    };
+    pendingDrag.push(entry);
+    // Make it selectable immediately on THIS phone, same as plats.
+    if(!effectiveDragList.includes(fields.namn)){
+      effectiveDragList = [...effectiveDragList, fields.namn];
+      localStorage.setItem(DRAG_CACHE_KEY, JSON.stringify(effectiveDragList));
+    }
+    saveAll();
+    renderGrid();
+    renderSessionBar(); // so the Drag/Teknik dropdown offers the new name right away
+    closeOverlay();
+    showToast('Drag/teknik tillagd — valbar direkt i listan.');
+    broadcastDragNow(entry);
+  });
+}
+
+// Fires the instant a new drag/teknik is saved, same "Option 3" hybrid
+// pattern as broadcastPlatsNow — best-effort immediate send, never awaited,
+// with `entry` still riding along in pendingDrag for the next full
+// Exportera as an offline safety net either way.
+async function broadcastDragNow(entry){
+  const dragForSheet = [{ namn: entry.namn }];
+  try{
+    await fetch(config.webAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ rows: [], drag: dragForSheet, secret: config.secret || '' })
+    });
+  } catch(err){
+    console.warn('[Drag broadcast] Sheet unreachable, will retry with next export:', err);
+  }
+  await postgresWrite('/drag', [toPostgresDrag(entry)]);
+}
+
 // ---------- Session sheet (consolidates the old separate ☰/📊 buttons) ----------
 // Per-catch deletion (formerly the ☰ button's own simple list) now lives as a
 // ✕ column directly in Sessionsstatistik instead of a separate screen — same
@@ -1539,12 +1648,16 @@ function openSessionSheet(){
     <button class="option-row" id="rowNewPlats" type="button">
       <span>📍 Lägg till ny plats</span><span class="check">›</span>
     </button>
+    <button class="option-row" id="rowNewDrag" type="button">
+      <span>🎣 Lägg till ny drag/teknik</span><span class="check">›</span>
+    </button>
     <button class="option-row" id="rowNewSession" type="button" style="border-color:var(--bad);color:var(--bad);">
       <span>↺ Ny session</span><span class="check">›</span>
     </button>
   `);
   document.getElementById('rowStats').addEventListener('click', openStatsView);
   document.getElementById('rowNewPlats').addEventListener('click', openNewPlatsForm);
+  document.getElementById('rowNewDrag').addEventListener('click', openNewDragForm);
   document.getElementById('rowNewSession').addEventListener('click', openNewSessionConfirm);
 }
 document.getElementById('btnSession').addEventListener('click', openSessionSheet);
@@ -2010,14 +2123,15 @@ document.getElementById('btnNappNytt').addEventListener('click', openNappNyttDas
 // this always goes through an explicit confirmation naming exactly what's
 // about to be deleted, same principle as the existing export-confirm dialog.
 function openNewSessionConfirm(){
-  const n = catchLog.length, p = pendingPlatser.length;
-  if(n===0 && p===0){
+  const n = catchLog.length, p = pendingPlatser.length, d = pendingDrag.length;
+  if(n===0 && p===0 && d===0){
     showToast('Inget att rensa — sessionen är redan tom.');
     return;
   }
   const parts = [];
   if(n) parts.push(`${n} ej exporterad${n===1?'':'e'} fångst${n===1?'':'er'}`);
   if(p) parts.push(`${p} väntande ny${p===1?'':'a'} plats${p===1?'':'er'}`);
+  if(d) parts.push(`${d} väntande ny${d===1?'':'a'} drag/teknik`);
   openOverlay(`
     <h2>Ny session?</h2>
     <p style="color:var(--muted);font-size:13.5px;margin-top:-8px;">
@@ -2033,6 +2147,7 @@ function openNewSessionConfirm(){
   document.getElementById('confirmNewSession').addEventListener('click', ()=>{
     catchLog = [];
     pendingPlatser = [];
+    pendingDrag = [];
     saveAll();
     renderGrid();
     closeOverlay();
@@ -2056,7 +2171,7 @@ function openStatsView(){
       <td>${cellSelectHTML(SPECIES.map(s=>s.art), c.id, 'art', c.art)}</td>
       <td>${cellSelectHTML(SIZES, c.id, 'storlek', c.storlek)}</td>
       <td>${cellSelectHTML(effectivePlatsList, c.id, 'plats', c.plats)}</td>
-      <td>${cellSelectHTML(DRAG_LIST, c.id, 'drag', c.drag)}</td>
+      <td>${cellSelectHTML(effectiveDragList, c.id, 'drag', c.drag)}</td>
       <td>${cellSelectHTML(VINDRIKTNING_LIST, c.id, 'vindriktning', c.vindriktning)}</td>
       <td>${cellSelectHTML(LUFTTRYCK_LIST, c.id, 'lufttryck', c.lufttryck)}</td>
       <td>${cellSelectHTML(LUFTTRYCKSTREND_LIST, c.id, 'lufttryckstrend', c.lufttryckstrend)}</td>
@@ -2080,7 +2195,7 @@ function openStatsView(){
     <div class="stats-table-wrap">
       <table class="stats-table">
         <thead><tr>
-          <th>Art</th><th>Storlek</th><th>Plats</th><th>Drag</th><th>Vind</th><th>Tryck</th><th>Trend</th><th>Fiskare</th><th>Datum</th><th>Tid</th><th>Vikt</th><th>Längd</th><th></th>
+          <th>Art</th><th>Storlek</th><th>Plats</th><th>Drag/Teknik</th><th>Vind</th><th>Tryck</th><th>Trend</th><th>Fiskare</th><th>Datum</th><th>Tid</th><th>Vikt</th><th>Längd</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -2171,12 +2286,14 @@ function openMeasureForm(id){
 // the whole session's pending log, so the actual send is gated behind an
 // explicit "Ja, exportera".
 document.getElementById('btnExport').addEventListener('click', ()=>{
-  if(catchLog.length===0 && pendingPlatser.length===0) return;
+  if(catchLog.length===0 && pendingPlatser.length===0 && pendingDrag.length===0) return;
   const n = catchLog.length;
   const p = pendingPlatser.length;
+  const d = pendingDrag.length;
   const parts = [];
   if(n) parts.push(`${n} fångst${n===1?'':'er'}`);
   if(p) parts.push(`${p} ny${p===1?'':'a'} plats${p===1?'':'er'}`);
+  if(d) parts.push(`${d} ny${d===1?'':'a'} drag/teknik`);
   openOverlay(`
     <h2>Exportera ${parts.join(' + ')}?</h2>
     <p style="color:var(--muted);font-size:13.5px;margin-top:-8px;">
@@ -2261,6 +2378,23 @@ function toPostgresPlats(p){
   };
 }
 
+// Confirmed with Homelab (2026-09-03): fishing.drag's own primary-key
+// column is 'namn', not 'drag' — same pattern as fiskare/arter/platser
+// (the reference table's own PK, not the FK column name catches happens
+// to use). fishing_writer/fishing_sandbox_writer now have SELECT+INSERT+
+// UPDATE on drag (all three needed for the merge-duplicates upsert to
+// actually plan, same lesson already learned on platser). Verified live
+// by Homelab: 201 on a new insert, 200 safe no-op resending the same name.
+// Sandbox note: fishing_sandbox has its OWN isolated drag table now (not
+// shared read-only with real fishing.drag anymore, unlike arter) — a
+// sandbox test lure name lands only in fishing_sandbox.drag, verified by
+// Homelab with a real negative test (sandbox token 403s against the real
+// fishing.drag). No app-side difference — same endpoint, same
+// Content-Profile-based schema selection as always.
+function toPostgresDrag(d){
+  return { namn: d.namn };
+}
+
 // One bulk-insert POST to a PostgREST endpoint. Best-effort and self-
 // contained: NEVER throws, so a caller can fire this without awaiting it
 // and it can never affect the Sheet export's own success/failure path —
@@ -2327,7 +2461,11 @@ async function postgresWrite(path, rowsArr){
     // PostgREST turn a resend into a safe update instead of a 23505
     // unique-violation error. Catches never need this — each one really is
     // a new row, never deliberately resent.
-    if(path === '/platser'){
+    if(path === '/platser' || path === '/drag'){
+      // Same reasoning as /platser (see the comment block above this
+      // function) — a drag/teknik name can also legitimately be sent
+      // twice (immediate broadcastDragNow + a next-Exportera resend), and
+      // is a plain PRIMARY KEY with no ON CONFLICT otherwise.
       headers['Prefer'] = 'resolution=merge-duplicates';
     }
     const res = await fetch(PG_BASE_URL + path, {
@@ -2449,6 +2587,7 @@ async function performExport(){
     platsId: p.platsId, coordinates: p.coordinates, zon: p.zon,
     djup: p.djup, bottentyp: p.bottentyp, notering: p.notering
   }));
+  const drag = pendingDrag.map(d=>({ namn: d.namn }));
 
   // No per-row filtering by name needed (see the note above PG_BASE_URL,
   // 2026-08-30): the server ignores whatever `fiskare` is sent and always
@@ -2473,36 +2612,39 @@ async function performExport(){
   // actually finish, without ever delaying the Klart! message itself.
   const pgWrites = [
     postgresWrite('/catches', rows.map(toPostgresCatch)),
-    postgresWrite('/platser', platser.map(toPostgresPlats))
+    postgresWrite('/platser', platser.map(toPostgresPlats)),
+    postgresWrite('/drag', drag.map(toPostgresDrag))
   ];
 
   try{
     const res = await fetch(config.webAppUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ rows, platser, secret: config.secret || '' })
+      body: JSON.stringify({ rows, platser, drag, secret: config.secret || '' })
     });
     const data = await res.json();
     if(data.success){
       catchLog = [];
       pendingPlatser = [];
+      pendingDrag = [];
       config.lastSyncAt = new Date().toISOString();
       saveAll();
       renderGrid();
       renderHeaderRight();
       const platserNote = data.platserAdded ? `, ${data.platserAdded} plats(er)` : '';
-      btn.textContent = `Klart! ${data.count} sparade${platserNote} ✓`;
+      const dragNote = data.dragAdded ? `, ${data.dragAdded} drag/teknik` : '';
+      btn.textContent = `Klart! ${data.count} sparade${platserNote}${dragNote} ✓`;
     } else {
       btn.textContent = 'Fel: ' + (data.error || 'okänt');
     }
   } catch(err){
     btn.textContent = 'Ingen anslutning — försök igen senare';
   }
-  setTimeout(()=>{ btn.textContent='Exportera'; btn.disabled = (catchLog.length===0 && pendingPlatser.length===0); }, 2500);
+  setTimeout(()=>{ btn.textContent='Exportera'; btn.disabled = (catchLog.length===0 && pendingPlatser.length===0 && pendingDrag.length===0); }, 2500);
 
-  // See the comment above pgWrites — this is what actually keeps the two
+  // See the comment above pgWrites — this is what actually keeps all three
   // dual-write fetches alive long enough to complete on a real device.
-  const [catchesResult, platserResult] = await Promise.allSettled(pgWrites);
+  const [catchesResult, platserResult, dragResult] = await Promise.allSettled(pgWrites);
 
   // Second, independent trigger to clear the grid (2026-08-31): a real
   // device showed the Sheet path above can land its write successfully
@@ -2517,14 +2659,16 @@ async function performExport(){
   // branch above already cleared everything.
   const pgCatchesOk = catchesResult.status === 'fulfilled' && catchesResult.value === true;
   const pgPlatserOk = platserResult.status === 'fulfilled' && platserResult.value === true;
+  const pgDragOk = dragResult.status === 'fulfilled' && dragResult.value === true;
   let clearedByPg = false;
   if(pgCatchesOk && catchLog.length){ catchLog = []; clearedByPg = true; }
   if(pgPlatserOk && pendingPlatser.length){ pendingPlatser = []; clearedByPg = true; }
+  if(pgDragOk && pendingDrag.length){ pendingDrag = []; clearedByPg = true; }
   if(clearedByPg){
     saveAll();
     renderGrid();
     renderHeaderRight();
-    btn.disabled = (catchLog.length===0 && pendingPlatser.length===0);
+    btn.disabled = (catchLog.length===0 && pendingPlatser.length===0 && pendingDrag.length===0);
   }
 }
 
@@ -2554,10 +2698,33 @@ async function refreshPlatsList(){
   }
 }
 
+// ---------- Live Drag/Teknik sync ----------
+// Same pattern as refreshPlatsList — POST with an {action:'getDrag'}
+// marker (not a true GET, same CORS reasoning), silently keeps the
+// cached/fallback list on any failure.
+async function refreshDragList(){
+  try{
+    const res = await fetch(config.webAppUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'getDrag', secret: config.secret || '' })
+    });
+    const data = await res.json();
+    if(data.success && Array.isArray(data.drag) && data.drag.length){
+      effectiveDragList = data.drag;
+      localStorage.setItem(DRAG_CACHE_KEY, JSON.stringify(effectiveDragList));
+      renderSessionBar(); // re-render so an already-open Drag/Teknik dropdown picks up the fresh list
+    }
+  }catch(err){
+    // offline, or Apps Script not reachable — fine, keep what we already have
+  }
+}
+
 // ---------- Init ----------
 renderSessionBar();
 renderGrid();
 refreshPlatsList();
+refreshDragList();
 renderHeaderRight();
 renderReadoutStrip();
 fetchLiveConditions().then(() => { renderReadoutStrip(); renderHeaderRight(); });
