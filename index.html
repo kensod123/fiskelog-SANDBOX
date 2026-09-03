@@ -634,6 +634,14 @@ const WIND_DIR_MAP = {
   'N': 'Nord', 'NO': 'Nordost', 'Ö': 'Öst', 'SO': 'Sydost',
   'S': 'Syd', 'SV': 'Sydvästlig', 'V': 'Väst', 'NV': 'Nordväst'
 };
+// Arrow points where the wind is BLOWING TO (SMHI convention), i.e. the
+// opposite of the FROM-direction code the API gives us — "SV" (from the
+// southwest) blows toward the northeast, hence ↗. Added 2026-09-03 for the
+// SMHI-style readout ("SV ↗ 3 (10)"); direction text itself is unchanged.
+const WIND_ARROW_MAP = {
+  'N': '↓', 'NO': '↙', 'Ö': '←', 'SO': '↖',
+  'S': '↑', 'SV': '↗', 'V': '→', 'NV': '↘'
+};
 const TREND_MAP = {
   // The "very rapidly" extremes collapse into the nearest normal case —
   // SMHI's 5-value classification doesn't have a slot in the app's
@@ -679,6 +687,7 @@ async function fetchLiveConditions(){
     if(!data) return;
     liveConditions = {
       windDirRaw: data.wind_direction, windSpeed: data.wind_speed_ms,
+      windGust: data.wind_gust_ms,
       pressureRaw: data.air_pressure_hpa, trendRaw: data.pressure_trend_3h,
       asOf: data.as_of
     };
@@ -907,8 +916,17 @@ function renderReadoutStrip(){
   const age = timeAgo(liveConditions.asOf);
   const trendWord = TREND_MAP[liveConditions.trendRaw] || 'Ospecificerat';
   const staleCls = ''; // could flag very old readings here later if needed
+  // SMHI-style wind readout: direction, arrow, sustained speed, gust in
+  // parentheses — e.g. "SV ↗ 8 (11) m/s". Rounded to whole m/s to match
+  // SMHI's own public display. Gust parenthetical only shown once a reading
+  // with wind_gust_ms has actually come through (older cached liveConditions
+  // from before 2026-09-03 won't have it — degrades gracefully, no gust shown).
+  const windArrow = WIND_ARROW_MAP[liveConditions.windDirRaw] || '';
+  const windSpeedRounded = Math.round(liveConditions.windSpeed);
+  const gustPart = (liveConditions.windGust != null) ? ` (${Math.round(liveConditions.windGust)})` : '';
+  const windText = `${liveConditions.windDirRaw} ${windArrow} ${windSpeedRounded}${gustPart} m/s`;
   el.innerHTML = `
-    <div class="ro"><div class="ro-label">Vind</div><div class="ro-value ${staleCls}">${liveConditions.windDirRaw} ${liveConditions.windSpeed} m/s</div></div>
+    <div class="ro"><div class="ro-label">Vind</div><div class="ro-value ${staleCls}">${windText}</div></div>
     <div class="ro"><div class="ro-label">Atm.tryck</div><div class="ro-value ${staleCls}">${liveConditions.pressureRaw} hPa</div></div>
     <div class="ro"><div class="ro-label">Trycktrend</div><div class="ro-value ${staleCls}">${TREND_ARROW[trendWord]||''} ${trendWord.toLowerCase()}</div></div>
     <div class="ro"><div class="ro-label">Uppdaterad</div><div class="ro-value stale">${age||'–'}</div></div>
